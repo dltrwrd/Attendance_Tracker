@@ -477,6 +477,14 @@ function generateHRMenu($activePage) {
         </a>
     </li>
     <li>
+        <a href="infractions.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'infractions' ? 'active' : '' ?>">
+            <div class="sidebar-icon-container">
+                <i class="sidebar-icon fas fa-file-contract"></i>
+            </div>
+            <span class="sidebar-text">Infractions</span>
+        </a>
+    </li>
+    <li>
         <a href="users.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'users' ? 'active' : '' ?>">
             <div class="sidebar-icon-container">
                 <i class="sidebar-icon fas fa-user-friends"></i>
@@ -504,15 +512,13 @@ function generateDefaultMenu($activePage) {
     return ob_get_clean();
 }
 
-// Dapat meron kang function na ito para makuha ang user role
 function getUserRole() {
-    // I-adjust ito base sa iyong authentication system
     if (isAdmin()) {
         return 'admin';
     } elseif (isHR()) {
         return 'hr';
     } else {
-        return 'default'; // o kung anuman ang default role mo
+        return 'default';
     }
 }
 
