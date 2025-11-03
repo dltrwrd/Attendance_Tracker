@@ -573,15 +573,13 @@ function createIncidentReport() {
     formData.append('full_name', document.getElementById('full_name').value);
     formData.append('department', document.getElementById('department').value);
     formData.append('operation_manager', document.getElementById('operation_manager').value);
+    formData.append('date_of_incident', document.getElementById('date_of_<?= $type === 'absenteeism' ? 'absent' : 'incident' ?>').value);
+    formData.append('shift', document.getElementById('shift').value);
     
     <?php if ($type === 'absenteeism'): ?>
-    formData.append('date_of_incident', document.getElementById('date_of_absent').value);
-    formData.append('shift', document.getElementById('shift').value);
     formData.append('reason', document.getElementById('reason').value);
     formData.append('follow_call_in_procedure', document.getElementById('follow_call_in_procedure').value);
     <?php else: ?>
-    formData.append('date_of_incident', document.getElementById('date_of_incident').value);
-    formData.append('shift', document.getElementById('shift').value);
     formData.append('types', document.getElementById('types').value);
     formData.append('minutes_late', document.getElementById('minutes_late').value);
     <?php endif; ?>
@@ -589,7 +587,7 @@ function createIncidentReport() {
     // Show loading state
     const irButton = document.querySelector('button[onclick="createIncidentReport()"]');
     const originalText = irButton.innerHTML;
-    irButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Creating IR...';
+    irButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Creating IR & NTE...';
     irButton.disabled = true;
 
     fetch('../includes/create_incident_report.php', {
@@ -599,7 +597,13 @@ function createIncidentReport() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Incident Report created successfully!');
+            let successMessage = data.message;
+            
+            if (data.nte_id) {
+                successMessage += ` NTE #${data.nte_number} auto-generated.`;
+            }
+            
+            alert(successMessage);
             
             // Update the IR form field to "YES"
             document.getElementById('ir_form').value = 'YES';

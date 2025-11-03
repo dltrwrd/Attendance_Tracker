@@ -468,6 +468,8 @@ function generateHRMenu($activePage) {
             <span class="sidebar-text">Dashboard</span>
         </a>
     </li>
+    
+    <!-- Incident Report -->
     <li>
         <a href="incident_report.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'incident_report' ? 'active' : '' ?>">
             <div class="sidebar-icon-container">
@@ -476,6 +478,18 @@ function generateHRMenu($activePage) {
             <span class="sidebar-text">Incident Report</span>
         </a>
     </li>
+    
+    <!-- Notice to Explain -->
+    <li>
+        <a href="nte_list.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'nte' ? 'active' : '' ?>">
+            <div class="sidebar-icon-container">
+                <i class="sidebar-icon fas fa-file-alt"></i>
+            </div>
+            <span class="sidebar-text">Notice to Explain</span>
+        </a>
+    </li>
+    
+    <!-- Infractions -->
     <li>
         <a href="infractions.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'infractions' ? 'active' : '' ?>">
             <div class="sidebar-icon-container">
@@ -484,6 +498,8 @@ function generateHRMenu($activePage) {
             <span class="sidebar-text">Infractions</span>
         </a>
     </li>
+    
+    <!-- Team Members -->
     <li>
         <a href="users.php" class="sidebar-item flex items-center px-4 py-2 text-white <?= $activePage === 'users' ? 'active' : '' ?>">
             <div class="sidebar-icon-container">

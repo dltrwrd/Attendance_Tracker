@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/config.php';
 require_once '../includes/functions.php';
+require_once '../includes/nte_functions.php';
 
 if (!isLoggedIn() || !isHR()) {
     redirect(BASE_URL);
@@ -30,7 +31,6 @@ if ($id > 0) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // Set timezone sa PHP
         date_default_timezone_set('Asia/Manila');
 
         $data = [
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     date_of_incident = :date_of_incident,
                     shift = :shift,
                     incident_details = :incident_details,
-                    evidence = :evidence,
+                    evidence = :evidence
                     WHERE id = :id";
             
             $data['id'] = $id;
@@ -84,13 +84,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($data);
+            $new_ir_id = $pdo->lastInsertId();
             
-            $_SESSION['success'] = "Incident report created successfully!";
+            // AUTO-CREATE NTE HERE!
+            $nte_id = createNTEFromIR(
+                $new_ir_id,
+                $_POST['employee_id'],
+                $_POST['full_name'],
+                $_POST['department'],
+                $_POST['operation_manager'],
+                $_POST['date_of_incident'],
+                $_POST['shift'],
+                $_POST['incident_details'],
+                $_POST['infraction']
+            );
+            
+            $_SESSION['success'] = "Incident report created successfully! NTE #$nte_id has been automatically generated for review.";
         }
         
         redirect('incident_report.php');
         
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         $_SESSION['error'] = "Error saving record: " . $e->getMessage();
         redirect('incident_report.php');
     }

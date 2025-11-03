@@ -82,7 +82,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($data);
                 
-                $success = "Incident report created successfully!";
+                // GET THE NEWLY CREATED IR ID
+                $new_ir_id = $pdo->lastInsertId();
+                
+                // AUTO-CREATE NTE FROM THIS IR
+                require_once 'includes/nte_functions.php';
+                try {
+                    $nte_id = createNTEFromIR(
+                        $new_ir_id,
+                        $_POST['employee_id'],
+                        $_POST['full_name'],
+                        $_POST['department'],
+                        $_POST['operation_manager'],
+                        $_POST['date_of_incident'],
+                        $_POST['shift'],
+                        $_POST['incident_details'],
+                        $_POST['infraction']
+                    );
+                    
+                    $_SESSION['success'] = "Incident report created successfully! NTE #$nte_id auto-generated.";
+                } catch (Exception $e) {
+                    // If NTE creation fails, still show success for IR but log the error
+                    error_log("NTE Auto-creation failed: " . $e->getMessage());
+                    $_SESSION['success'] = "Incident report created successfully! (NTE generation failed: " . $e->getMessage() . ")";
+                }
             }
             
             // Set last submission timestamp to prevent duplicates
