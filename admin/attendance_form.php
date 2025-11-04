@@ -572,6 +572,7 @@ function createIncidentReport() {
     formData.append('employee_id', document.getElementById('employee_id').value);
     formData.append('full_name', document.getElementById('full_name').value);
     formData.append('department', document.getElementById('department').value);
+    formData.append('supervisor', document.getElementById('supervisor').value);
     formData.append('operation_manager', document.getElementById('operation_manager').value);
     formData.append('date_of_incident', document.getElementById('date_of_<?= $type === 'absenteeism' ? 'absent' : 'incident' ?>').value);
     formData.append('shift', document.getElementById('shift').value);

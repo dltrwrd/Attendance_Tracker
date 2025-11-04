@@ -5,24 +5,36 @@ require_once 'config.php';
 function getViolationInstance($employee_id, $current_date, $infraction_type) {
     global $pdo;
     
-    $sql = "SELECT nte.violation_instance, nte.cleansing_end_date, nte.id as nte_id
+    // First, get the nature_of_offense from the infraction mapping
+    $infraction_mapping = [
+        'ATTENDANCE - Tardiness' => 'TARDINESS',
+        'ATTENDANCE - Absences WITH Notification' => 'ABSENCE WITH NOTIFICATION',
+        'ATTENDANCE - Absences WITHOUT Notification' => 'ABSENCE WITHOUT NOTIFICATION', 
+        'OTHER HANDBOOK VIOLATION' => 'Non-adherence to prescribed work schedule, such as, but not limited to the following:'
+    ];
+    
+    $nature_of_offense = $infraction_mapping[$infraction_type] ?? $infraction_type;
+    
+    $sql = "SELECT nte.violation_instance, nte.cleansing_end_date, nte.id as nte_id,
+                   i.nature_of_offense, i.rule_section
             FROM notice_to_explain nte
             JOIN infractions i ON nte.infraction_id = i.id
             WHERE nte.employee_id = ? 
             AND nte.nte_status != 'draft'
             AND nte.cleansing_end_date >= ?
-            AND i.nature_of_offense LIKE ?
+            AND i.nature_of_offense = ?
             ORDER BY nte.date_issued DESC 
             LIMIT 1";
     
     $stmt = $pdo->prepare($sql);
-    $infraction_pattern = "%" . $infraction_type . "%";
-    $stmt->execute([$employee_id, $current_date, $infraction_pattern]);
+    $stmt->execute([$employee_id, $current_date, $nature_of_offense]);
     $result = $stmt->fetch();
     
     if ($result) {
         $previous_instance = $result['violation_instance'];
         $next_instance = escalateInstance($previous_instance);
+        
+        error_log("Previous violation found for $employee_id: $previous_instance -> $next_instance (Cleansing until: " . $result['cleansing_end_date'] . ")");
         
         return [
             'instance' => $next_instance,
@@ -30,6 +42,8 @@ function getViolationInstance($employee_id, $current_date, $infraction_type) {
             'within_cleansing' => true
         ];
     } else {
+        error_log("No previous violation found for $employee_id within cleansing period. Starting with 1st instance.");
+        
         return [
             'instance' => '1st',
             'previous_nte_id' => null,
@@ -70,27 +84,55 @@ function getSanctionByInstance($infraction_id, $instance) {
 }
 
 // Function to determine which infraction rule applies
-function determineInfractionRule($infraction_type) {
+function determineInfractionRule($infraction_type, $incident_details = '') {
     global $pdo;
     
-    $infraction_mapping = [
-        'ATTENDANCE - Tardiness' => 'TARDINESS',
-        'ATTENDANCE - Absences WITH Notification' => 'ABSENCE WITH NOTIFICATION',
-        'ATTENDANCE - Absences WITHOUT Notification' => 'ABSENCE WITHOUT NOTIFICATION',
-        'OTHER HANDBOOK VIOLATION' => 'NON-ADHERENCE'
+    error_log("=== DETERMINE INFRACTION RULE ===");
+    error_log("Infraction Type: " . $infraction_type);
+    error_log("Incident Details: " . $incident_details);
+    
+    // Direct rule section mapping - SIMPLIFIED AND FIXED
+    $rule_mapping = [
+        'ATTENDANCE - Tardiness' => 'RULE I Section 1-A',
+        'ATTENDANCE - Absences WITH Notification' => 'RULE I- Section 3', 
+        'ATTENDANCE - Absences WITHOUT Notification' => 'RULE I- Section 2-A', // Default to 2-A, days logic will override if needed
+        'OTHER HANDBOOK VIOLATION' => 'RULE I-Section 4-B'
     ];
     
-    $search_term = $infraction_mapping[$infraction_type] ?? $infraction_type;
+    $rule_section = $rule_mapping[$infraction_type] ?? '';
     
-    $sql = "SELECT id FROM infractions 
-            WHERE nature_of_offense LIKE ? 
-            OR specific_offenses LIKE ? 
-            LIMIT 1";
+    if (!$rule_section) {
+        error_log("No rule mapping found for: " . $infraction_type);
+        return null;
+    }
     
+    // Special handling for absence without notification based on days
+    if ($infraction_type === 'ATTENDANCE - Absences WITHOUT Notification') {
+        // Check if we can determine days from incident details
+        $days = 0;
+        if (preg_match('/(\d+)\s*day/i', $incident_details, $matches)) {
+            $days = (int)$matches[1];
+            error_log("Found days in incident details: " . $days);
+        }
+        
+        if ($days >= 3) {
+            $rule_section = 'RULE I- Section 2-B';
+            error_log("Using RULE I- Section 2-B for " . $days . " days NCNS");
+        } else {
+            $rule_section = 'RULE I- Section 2-A';
+            error_log("Using RULE I- Section 2-A for " . $days . " days NCNS");
+        }
+    }
+    
+    error_log("Final rule section: " . $rule_section);
+    
+    // Get the infraction ID
+    $sql = "SELECT id FROM infractions WHERE rule_section = ? LIMIT 1";
     $stmt = $pdo->prepare($sql);
-    $search_pattern = "%" . $search_term . "%";
-    $stmt->execute([$search_pattern, $search_pattern]);
+    $stmt->execute([$rule_section]);
     $result = $stmt->fetch();
+    
+    error_log("Infraction ID result: " . ($result ? "FOUND ID: " . $result['id'] : "NOT FOUND"));
     
     return $result ? $result['id'] : null;
 }
@@ -108,15 +150,15 @@ function getInfractionDetails($infraction_id) {
 }
 
 // Function to auto-create NTE
-function createNTEFromIR($ir_id, $employee_id, $full_name, $department, $operation_manager, 
+function createNTEFromIR($ir_id, $employee_id, $full_name, $department, $supervisor, $operation_manager, 
                         $date_of_incident, $shift, $incident_details, $infraction_type) {
     global $pdo;
     
     try {
         $pdo->beginTransaction();
         
-        // 1. Determine infraction rule
-        $infraction_id = determineInfractionRule($infraction_type);
+        // 1. Determine infraction rule (PASS INCIDENT_DETAILS FOR BETTER MATCHING)
+        $infraction_id = determineInfractionRule($infraction_type, $incident_details);
         
         if (!$infraction_id) {
             throw new Exception("No matching infraction rule found for: " . $infraction_type);
@@ -137,15 +179,15 @@ function createNTEFromIR($ir_id, $employee_id, $full_name, $department, $operati
         
         // 6. Insert NTE
         $sql = "INSERT INTO notice_to_explain 
-                (ir_id, employee_id, full_name, department, operation_manager,
+                (ir_id, employee_id, full_name, department, supervisor, operation_manager,
                  date_of_incident, shift, incident_details,
                  infraction_id, rule_section, nature_of_offense, stipulation, specific_offenses,
                  violation_instance, sanction_proposed, previous_nte_id, cleansing_end_date, nte_status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NOW())";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NOW())";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
-            $ir_id, $employee_id, $full_name, $department, $operation_manager,
+            $ir_id, $employee_id, $full_name, $department, $supervisor, $operation_manager,
             $date_of_incident, $shift, $incident_details,
             $infraction_id, $infraction_details['rule_section'], $infraction_details['nature_of_offense'],
             $infraction_details['stipulation'], $infraction_details['specific_offenses'],

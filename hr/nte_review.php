@@ -247,12 +247,22 @@ renderSidebar('nte');
                             <p class="text-white"><?= htmlspecialchars($nte['department']) ?></p>
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-400">Supervisor</label>
+                            <p class="text-white"><?= htmlspecialchars($nte['supervisor']) ?></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400">Operation Manager</label>
+                            <p class="text-white"><?= htmlspecialchars($nte['operation_manager']) ?></p>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-400">Incident Date</label>
-                            <p class="text-white"><?= htmlspecialchars($nte['date_of_incident']) ?></p>
+                            <p class="text-white"><?= date('M d, Y', strtotime($nte['date_of_incident'])) ?></p>
+                            
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-400">Shift</label>
                             <p class="text-white"><?= htmlspecialchars($nte['shift']) ?></p>
+                            
                         </div>
                     </div>
                     
@@ -263,6 +273,7 @@ renderSidebar('nte');
                 </div>
 
                 <!-- Violation Details -->
+                 <!-- For autofill function! (Need to recode this for dynamic inputs but still has the automation functionality)-->
                 <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <h3 class="text-lg font-bold text-white mb-4">Violation Details</h3>
                     
@@ -428,7 +439,8 @@ renderSidebar('nte');
                         <?php if ($nte['cleansing_end_date']): ?>
                         <div>
                             <label class="block text-sm font-medium text-gray-400">Cleansing Period Ends</label>
-                            <p class="text-white"><?= $nte['cleansing_end_date'] ?></p>
+                            <p class="text-white"><?= date('M d, Y', strtotime($nte['cleansing_end_date'])) ?></p>
+                            
                             <?php
                             $days_remaining = floor((strtotime($nte['cleansing_end_date']) - time()) / (60 * 60 * 24));
                             if ($days_remaining > 0) {

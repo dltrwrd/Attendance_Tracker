@@ -38,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'employee_id' => $_POST['employee_id'],
             'full_name' => $_POST['full_name'],
             'department' => $_POST['department'],
+            'supervisor' => $_POST['supervisor'],
             'operation_manager' => $_POST['operation_manager'],
             'infraction' => $_POST['infraction'],
             'reported_by' => $_POST['reported_by'],
@@ -56,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     employee_id = :employee_id,
                     full_name = :full_name,
                     department = :department,
+                    supervisor = :supervisor,
                     operation_manager = :operation_manager,
                     infraction = :infraction,
                     reported_by = :reported_by,
@@ -74,11 +76,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Insert new record
             $sql = "INSERT INTO incident_report 
-                    (email_address, employee_id, full_name, department, operation_manager, 
+                    (email_address, employee_id, full_name, department, supervisor, operation_manager, 
                      infraction, reported_by, position, date_of_incident, shift, 
                      incident_details, evidence, created_at) 
                     VALUES 
-                    (:email_address, :employee_id, :full_name, :department, :operation_manager,
+                    (:email_address, :employee_id, :full_name, :department, :supervisor, :operation_manager,
                      :infraction, :reported_by, :position, :date_of_incident, :shift,
                      :incident_details, :evidence, :created_at)";
 
@@ -96,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['employee_id'],
                     $_POST['full_name'],
                     $_POST['department'],
+                    $_POST['supervisor'],
                     $_POST['operation_manager'],
                     $_POST['date_of_incident'],
                     $_POST['shift'],
@@ -142,6 +145,10 @@ renderSidebar('incident_report');
             <form method="POST">
                 <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
                     <!-- Employee Information -->
+                     <input type="hidden" id="supervisor" name="supervisor" required readonly
+                                    value="<?= htmlspecialchars($record['supervisor'] ?? '') ?>"
+                                    class="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-md text-gray-400">
+
                     <div class="space-y-4">
                          <div class="grid grid-cols-2 md:grid-cols-2 gap-6">
                             <div>
@@ -323,6 +330,7 @@ function fetchEmployeeDetails(employeeId) {
             if (data.success) {
                 document.getElementById('full_name').value = data.employee.full_name;
                 document.getElementById('department').value = data.employee.department;
+                document.getElementById('supervisor').value = data.employee.supervisor;
                 document.getElementById('operation_manager').value = data.employee.operation_manager;
                 document.getElementById('email_address').value = data.employee.email;
             }

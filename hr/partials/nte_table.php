@@ -87,6 +87,7 @@ try {
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Employee ID</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-48">Full Name</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Department</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Supervisor</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Date of Incident</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Violation</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Instance</th>
@@ -124,6 +125,11 @@ try {
                         <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
                             <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($nte['department']) ?>">
                                 <?= htmlspecialchars($nte['department']) ?>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($nte['supervisor']) ?>">
+                                <?= htmlspecialchars($nte['supervisor']) ?>
                             </div>
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
@@ -164,6 +170,18 @@ try {
                             </span>
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
+                            <?php if (!empty($nte['uploaded_file'])): ?>
+                                <a href="../uploads/nte/<?= $nte['uploaded_file'] ?>" 
+                                target="_blank" 
+                                class="text-green-500 hover:text-green-400"
+                                title="View Uploaded File">
+                                    <i class="fas fa-file-pdf"></i>
+                                </a>
+                            <?php else: ?>
+                                <span class="text-gray-500">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap">
                             <div class="text-sm text-gray-300">
                                 <?= date('M d, Y', strtotime($nte['created_at'])) ?>
                             </div>
@@ -178,18 +196,6 @@ try {
                             <a href="employee_history.php?employee_id=<?= $nte['employee_id'] ?>" title="View History" class="text-green-500 hover:text-green-400">
                                 <i class="fas fa-history"></i>
                             </a>
-                        </td>
-                        <td class="px-4 py-4 whitespace-nowrap">
-                            <?php if (!empty($nte['uploaded_file'])): ?>
-                                <a href="../uploads/nte/<?= $nte['uploaded_file'] ?>" 
-                                target="_blank" 
-                                class="text-green-500 hover:text-green-400"
-                                title="View Uploaded File">
-                                    <i class="fas fa-file-pdf"></i>
-                                </a>
-                            <?php else: ?>
-                                <span class="text-gray-500">-</span>
-                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>

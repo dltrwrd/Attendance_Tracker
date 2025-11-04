@@ -76,6 +76,7 @@ try {
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Employee ID</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-48">Full Name</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Department</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Supervisor</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Operations Manager</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Date of Incident</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Shift</th>
@@ -109,6 +110,11 @@ try {
                         <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
                             <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['department']) ?>">
                                 <?= htmlspecialchars($record['department']) ?>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['supervisor']) ?>">
+                                <?= htmlspecialchars($record['supervisor']) ?>
                             </div>
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
