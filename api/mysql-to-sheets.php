@@ -85,6 +85,23 @@ try {
         $stmt = $pdo->prepare("SELECT * FROM incident_report");
         $stmt->execute();
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($type === 'ticket') {
+        $stmt = $pdo->prepare("SELECT * FROM ticket ORDER BY Timestamp ASC");
+        $stmt->execute();
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        usort($data, function($a, $b) {
+            $timeA = strtotime($a['timestamp']);
+            $timeB = strtotime($b['timestamp']);
+            
+            $dateCompare = strcmp($a['Timestamp'], $b['Timestamp']);
+            if ($dateCompare !== 0) {
+                return $dateCompare;
+            }
+            
+            return $timeA - $timeB;
+        });
+        
     } else {
         throw new Exception("Invalid data type requested");
     }
