@@ -220,6 +220,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['success'] = "Tardiness record added successfully!";
                 logActivity("Created tardiness record for {$data['full_name']}", $recordId, 'tardiness');
             }
+            
+            // ADD THIS: Update tardiness IR status after insert/update
+            updateTardinessIRStatus($pdo, $employeeId);
         }
         
         $pdo->commit();

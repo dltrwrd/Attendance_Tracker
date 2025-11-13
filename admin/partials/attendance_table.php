@@ -211,9 +211,12 @@ try {
     $stmt->execute();
     $records = $stmt->fetchAll();
 
-    // Only process for tardiness records
+    // Only process for tardiness records - simplified version
     if ($type === 'tardiness') {
-        // Group records by employee_id
+        // The actual IR status updates now happen immediately when records are created/updated
+        // This section is kept minimal to ensure display consistency
+        
+        // Group records by employee_id for display purposes only
         $employeeRecords = [];
         foreach ($records as $record) {
             $employeeId = $record['employee_id'];
@@ -223,104 +226,9 @@ try {
             $employeeRecords[$employeeId][] = $record;
         }
 
-        // Process each employee's records
+        // Just update the display array to match what's in the database
+        // No complex processing needed here anymore
         foreach ($employeeRecords as $employeeId => $empRecords) {
-            $totalMinutes = 0;
-            $lateCount = 0;
-            $firstAccumulationDate = null;
-            $hasActiveIR = false;
-            $latestRecordDate = null;
-            
-            // Sort records by date_of_incident descending to find the most recent first
-            usort($empRecords, function($a, $b) {
-                return strtotime($b['date_of_incident']) - strtotime($a['date_of_incident']);
-            });
-
-            // Get the most recent record date
-            if (!empty($empRecords)) {
-                $latestRecordDate = strtotime($empRecords[0]['date_of_incident']);
-            }
-
-            // Now sort ascending for processing
-            usort($empRecords, function($a, $b) {
-                return strtotime($a['date_of_incident']) - strtotime($b['date_of_incident']);
-            });
-
-            // First pass: Check for any active FOR IR or YES records within 1 month of latest record
-            foreach ($empRecords as $record) {
-                $incidentDate = strtotime($record['date_of_incident']);
-                $expirationDate = strtotime('+1 month', $incidentDate);
-                
-                // Only consider records within 1 month of the latest record
-                if ($latestRecordDate <= $expirationDate) {
-                    if ($record['ir_form'] === 'FOR IR' || $record['ir_form'] === 'YES') {
-                        $hasActiveIR = true;
-                        break;
-                    }
-                }
-            }
-
-            // Second pass: Process records
-            foreach ($empRecords as &$record) {
-                $incidentDate = strtotime($record['date_of_incident']);
-                $expirationDate = strtotime('+1 month', $incidentDate);
-                
-                // Skip if record is older than 1 month from latest record
-                if ($latestRecordDate > $expirationDate) {
-                    continue;
-                }
-
-                // If there's any active FOR IR or YES within the current period, all subsequent records should be FOR IR
-                if ($hasActiveIR && $record['ir_form'] === 'FOR ACCUMULATION') {
-                    $record['ir_form'] = 'FOR IR';
-                    try {
-                        $updateStmt = $pdo->prepare("UPDATE tardiness SET ir_form = 'FOR IR' WHERE id = :id");
-                        $updateStmt->bindValue(':id', $record['id']);
-                        $updateStmt->execute();
-                    } catch (PDOException $e) {
-                        error_log("Error updating record ID {$record['id']}: " . $e->getMessage());
-                    }
-                    continue;
-                }
-
-                // Original accumulation logic for current period
-                if ($record['ir_form'] === 'FOR ACCUMULATION') {
-                    if ($firstAccumulationDate === null) {
-                        $firstAccumulationDate = $incidentDate;
-                    }
-                    
-                    $totalMinutes += (int)$record['minutes_late'];
-                    $lateCount++;
-                }
-            }
-
-            // Check conditions and update if needed (only for current period)
-            if (!$hasActiveIR && ($lateCount >= 3 || $totalMinutes > 30)) {
-                foreach ($empRecords as &$record) {
-                    $incidentDate = strtotime($record['date_of_incident']);
-                    $expirationDate = strtotime('+1 month', $incidentDate);
-                    
-                    // Skip if not in current period
-                    if ($latestRecordDate > $expirationDate) {
-                        continue;
-                    }
-
-                    if ($firstAccumulationDate !== null && $incidentDate >= $firstAccumulationDate) {
-                        if ($record['ir_form'] === 'FOR ACCUMULATION') {
-                            $record['ir_form'] = 'FOR IR';
-                            try {
-                                $updateStmt = $pdo->prepare("UPDATE tardiness SET ir_form = 'FOR IR' WHERE id = :id");
-                                $updateStmt->bindValue(':id', $record['id']);
-                                $updateStmt->execute();
-                            } catch (PDOException $e) {
-                                error_log("Error updating record ID {$record['id']}: " . $e->getMessage());
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Update the original records array
             foreach ($empRecords as $updatedRecord) {
                 foreach ($records as &$originalRecord) {
                     if ($originalRecord['id'] === $updatedRecord['id']) {
