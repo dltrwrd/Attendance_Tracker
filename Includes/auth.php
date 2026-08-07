@@ -42,16 +42,14 @@ if (isset($_POST['login'])) {
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['nickname'] = $user['sub_name'];
                 $_SESSION['slt_email'] = $user['slt_email'];
+                $_SESSION['display_photo'] = $user['display_photo'] ?? '';
                 $_SESSION['last_activity'] = time();
                 
                 if (isAdmin()) {
                     redirect(ADMIN_URL);
-                } elseif (isHR()) {
-                    redirect(HR_URL);
                 } else {
                     redirect(BASE_URL);
                 }
-
             } else {
                 // Increment failed login attempts
                 $login_attempts = $user['login_attempts'] + 1;

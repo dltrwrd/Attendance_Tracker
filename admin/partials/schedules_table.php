@@ -30,91 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $whereConditions = [];
 $params = [];
 
-// FIXED: Better style decoding with error handling
+// Helper function to convert stored style to CSS classes
 function getStyleClasses($styleJson) {
     if (empty($styleJson)) return '';
     
-    try {
-        $style = json_decode($styleJson, true);
-        if (!$style || json_last_error() !== JSON_ERROR_NONE) return '';
-        
-        $classes = [];
-        
-        if (isset($style['isCustom']) && $style['isCustom']) {
-            return 'custom-color-cell';
-        } else {
-            // For predefined colors
-            if (!empty($style['bgColor'])) $classes[] = $style['bgColor'];
-            if (!empty($style['border'])) $classes[] = $style['border'];
-            if (!empty($style['textColor'])) $classes[] = $style['textColor'];
-        }
-        
-        return implode(' ', $classes);
-    } catch (Exception $e) {
-        error_log("Style decoding error: " . $e->getMessage());
-        return '';
-    }
-}
-
-// FIXED: Better custom style attribute handling
-function getCustomStyleAttributes($styleJson) {
-    if (empty($styleJson)) return '';
+    $style = json_decode($styleJson, true);
+    if (!$style) return '';
     
-    try {
-        $style = json_decode($styleJson, true);
-        if (!$style || json_last_error() !== JSON_ERROR_NONE) return '';
-        if (!isset($style['isCustom']) || !$style['isCustom']) return '';
-        
-        $styles = [];
-        
-        if (isset($style['isSolid']) && $style['isSolid']) {
-            if (isset($style['customColor'])) {
-                $styles[] = 'background-color: ' . $style['customColor'];
-                $styles[] = 'border-color: ' . $style['customColor'];
-            }
-        } else {
-            if (isset($style['customColor'])) {
-                $styles[] = 'background-color: ' . $style['customColor'] . '20';
-                $styles[] = 'border-color: ' . $style['customColor'] . '30';
-            }
-        }
-        
-        // Handle text color
-        if (isset($style['textColor']) && !empty($style['textColor'])) {
-            if (!strpos($style['textColor'], 'text-') === 0) {
-                $styles[] = 'color: ' . $style['textColor'];
-            }
-        } else if (isset($style['customColor'])) {
-            // Auto-contrast if no text color specified
-            $styles[] = 'color: ' . getContrastColorFromPHP($style['customColor']);
-        }
-        
-        return count($styles) > 0 ? 'style="' . implode('; ', $styles) . '"' : '';
-    } catch (Exception $e) {
-        error_log("Custom style decoding error: " . $e->getMessage());
-        return '';
-    }
-}
-
-// PHP helper function for server-side contrast calculation
-function getContrastColorFromPHP($hexcolor) {
-    // Remove the # if present
-    $hexcolor = str_replace("#", "", $hexcolor);
+    $classes = [];
+    if (!empty($style['bgColor'])) $classes[] = $style['bgColor'];
+    if (!empty($style['border'])) $classes[] = $style['border'];
+    if (!empty($style['textColor'])) $classes[] = $style['textColor'];
     
-    if(strlen($hexcolor) == 3) {
-        $hexcolor = $hexcolor[0].$hexcolor[0].$hexcolor[1].$hexcolor[1].$hexcolor[2].$hexcolor[2];
-    }
-    
-    // Convert to RGB
-    $r = hexdec(substr($hexcolor,0,2));
-    $g = hexdec(substr($hexcolor,2,2));
-    $b = hexdec(substr($hexcolor,4,2));
-    
-    // Calculate luminance
-    $luminance = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-    
-    // Return black or white based on luminance
-    return $luminance > 0.5 ? '#000000' : '#ffffff';
+    return implode(' ', $classes);
 }
 
 if (!empty($search)) {
@@ -198,22 +126,11 @@ try {
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Supervisor</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Operations Manager</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Week Beginning</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider text-center">Site</th>
                     
-                    <!-- Site header with filter -->
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider text-center">
-                        <div class="flex items-center justify-center">
-                            <span>Site</span>
-                            <button type="button" onclick="showColumnFilter('site', 'Site')" 
-                                    class="text-gray-400 hover:text-white ml-2">
-                                <i class="fas fa-filter text-xs"></i>
-                            </button>
-                        </div>
-                    </th>
-                    
-                    <!-- Dynamic day headers with dates and filters -->
+                    <!-- Dynamic day headers with dates -->
                     <?php
                     $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                    $dayFields = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
                     foreach ($days as $index => $day):
                         $date = '';
                         if (!empty($schedules[0]['week_beginning'])) {
@@ -225,13 +142,7 @@ try {
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                         <div class="flex flex-col items-center">
                             <div class="text-[10px] font-normal text-gray-400 mb-1"><?= $date ?></div>
-                            <div class="flex items-center justify-center w-full">
-                                <span><?= $day ?></span>
-                                <button type="button" onclick="showColumnFilter('<?= $dayFields[$index] ?>', '<?= $day ?>')" 
-                                        class="text-gray-400 hover:text-white ml-2">
-                                    <i class="fas fa-filter text-xs"></i>
-                                </button>
-                            </div>
+                            <div><?= $day ?></div>
                         </div>
                     </th>
                     <?php endforeach; ?>
@@ -272,34 +183,32 @@ try {
                             <div class="text-sm text-gray-300 uppercase tracking-wide"><?= date('M j, Y', strtotime($schedule['week_beginning'])) ?></div>
                         </td>
                         
-                        <!-- Editable fields - Now styling applied to TD directly -->
-                        <td class="px-6 py-4 whitespace-nowrap h-full editable-cell selectable <?= !empty($schedule['site_style']) ? getStyleClasses($schedule['site_style']) : '' ?> <?= !empty($schedule['site_notes']) ? 'has-notes' : '' ?>"
-                            <?= !empty($schedule['site_style']) ? getCustomStyleAttributes($schedule['site_style']) : '' ?>
-                            data-schedule-id="<?= $schedule['id'] ?>"
-                            data-field="site"
-                            data-original-value="<?= htmlspecialchars($schedule['site'] ?? '') ?>"
-                            data-notes="<?= !empty($schedule['site_notes']) ? htmlspecialchars($schedule['site_notes']) : '' ?>"
-                            title="Click to edit - <?= !empty($schedule['site_notes']) ? 'Has notes (hover to view)' : 'No notes' ?>">
-                            <div class="min-w-[100px] cursor-pointer px-2 py-1 rounded hover:bg-gray-600/50 transition-colors duration-200 text-sm border border-transparent text-center h-full flex items-center justify-center">
+                        <!-- Editable fields -->
+                        <td class="px-6 py-4 whitespace-nowrap h-full">
+                            <div class="editable-cell min-w-[100px] cursor-pointer px-2 py-1 rounded hover:bg-gray-600/50 transition-colors duration-200 text-sm text-gray-200 border border-transparent text-center h-full flex items-center justify-center <?= !empty($schedule['site_style']) ? getStyleClasses($schedule['site_style']) : '' ?> <?= !empty($schedule['site_notes']) ? 'has-notes' : '' ?>"
+                                data-schedule-id="<?= $schedule['id'] ?>"
+                                data-field="site"
+                                data-original-value="<?= htmlspecialchars($schedule['site'] ?? '') ?>"
+                                data-notes="<?= !empty($schedule['site_notes']) ? htmlspecialchars($schedule['site_notes']) : '' ?>"
+                                title="Click to edit - <?= !empty($schedule['site_notes']) ? 'Has notes (hover to view)' : 'No notes' ?>">
                                 <?= !empty($schedule['site']) ? htmlspecialchars($schedule['site']) : '-' ?>
                             </div>
                         </td>
 
-                        <!-- Daily schedule fields - Now styling applied to TD directly -->
+                        <!-- Daily schedule fields -->
                         <?php
                         $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
                         foreach ($days as $day):
                             $styleField = $day . '_style';
                             $notesField = $day . '_notes';
                         ?>
-                        <td class="px-6 py-4 whitespace-nowrap h-full editable-cell selectable <?= !empty($schedule[$styleField]) ? getStyleClasses($schedule[$styleField]) : '' ?> <?= !empty($schedule[$notesField]) ? 'has-notes' : '' ?>"
-                            <?= !empty($schedule[$styleField]) ? getCustomStyleAttributes($schedule[$styleField]) : '' ?>
-                            data-schedule-id="<?= $schedule['id'] ?>"
-                            data-field="<?= $day ?>"
-                            data-original-value="<?= htmlspecialchars($schedule[$day] ?? '') ?>"
-                            data-notes="<?= !empty($schedule[$notesField]) ? htmlspecialchars($schedule[$notesField]) : '' ?>"
-                            title="Click to edit - <?= !empty($schedule[$notesField]) ? 'Has notes (hover to view)' : 'No notes' ?>">
-                            <div class="min-w-[120px] cursor-pointer px-2 py-1 rounded hover:bg-gray-600/50 transition-colors duration-200 text-sm border border-transparent text-center h-full flex items-center justify-center">
+                        <td class="px-6 py-4 whitespace-nowrap h-full">
+                            <div class="editable-cell min-w-[120px] cursor-pointer px-2 py-1 rounded hover:bg-gray-600/50 transition-colors duration-200 text-sm text-gray-200 border border-transparent text-center h-full flex items-center justify-center <?= !empty($schedule[$styleField]) ? getStyleClasses($schedule[$styleField]) : '' ?> <?= !empty($schedule[$notesField]) ? 'has-notes' : '' ?>"
+                                data-schedule-id="<?= $schedule['id'] ?>"
+                                data-field="<?= $day ?>"
+                                data-original-value="<?= htmlspecialchars($schedule[$day] ?? '') ?>"
+                                data-notes="<?= !empty($schedule[$notesField]) ? htmlspecialchars($schedule[$notesField]) : '' ?>"
+                                title="Click to edit - <?= !empty($schedule[$notesField]) ? 'Has notes (hover to view)' : 'No notes' ?>">
                                 <?= !empty($schedule[$day]) ? htmlspecialchars($schedule[$day]) : '-' ?>
                             </div>
                         </td>

@@ -1,0 +1,336 @@
+[2026-02-24 10:40:32] === TERABIT TRACKER PAGE LOADED ===
+------------------------
+[2026-02-24 10:40:32] Request URI: /admin/terabit_tracker.php?status=pending
+------------------------
+[2026-02-24 10:40:32] Request Method: GET
+------------------------
+[2026-02-24 10:40:32] GET parameters:
+Array
+(
+    [status] => pending
+)
+
+------------------------
+[2026-02-24 10:40:32] POST parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:32] Session ID: No session
+------------------------
+[2026-02-24 10:40:32] Checking config file paths...
+------------------------
+[2026-02-24 10:40:32] Config file exists
+------------------------
+[2026-02-24 10:40:32] Functions file exists
+------------------------
+[2026-02-24 18:40:32] Config and functions loaded successfully
+------------------------
+[2026-02-24 18:40:32] Database connection OK
+------------------------
+[2026-02-24 18:40:32] User is logged in as admin
+------------------------
+[2026-02-24 18:40:32] Filters applied:
+Array
+(
+    [tab] => all
+    [search] => 
+    [status] => pending
+    [type] => 
+    [dateFrom] => 
+    [dateTo] => 
+    [isEmailOnly] => 
+)
+
+------------------------
+[2026-02-24 18:40:32] Fetching statistics...
+------------------------
+[2026-02-24 18:40:32] Statistics:
+Array
+(
+    [pending] => 0
+    [closed_today] => 0
+    [is_email] => 0
+    [total] => 0
+)
+
+------------------------
+[2026-02-24 18:40:32] Where SQL: 1=1 AND status = ?
+------------------------
+[2026-02-24 18:40:32] Query params:
+Array
+(
+    [0] => pending
+)
+
+------------------------
+[2026-02-24 18:40:32] Total records: 0, Total pages: 0
+------------------------
+[2026-02-24 18:40:32] Fetch query: SELECT * FROM network_tickets WHERE 1=1 AND status = ? ORDER BY date_received DESC LIMIT 10 OFFSET 0
+------------------------
+[2026-02-24 18:40:32] Fetched 0 tickets for current page
+------------------------
+[2026-02-24 18:40:32] Checking layout components...
+------------------------
+[2026-02-24 18:40:32] Layout file exists
+------------------------
+[2026-02-24 18:40:32] Rendering page...
+------------------------
+[2026-02-24 18:40:32] === PAGE RENDER START ===
+
+------------------------
+[2026-02-24 18:40:32] === PAGE RENDER COMPLETE ===
+
+------------------------
+[2026-02-24 10:40:39] === TERABIT TRACKER PAGE LOADED ===
+------------------------
+[2026-02-24 10:40:39] Request URI: /admin/terabit_tracker.php?status=close
+------------------------
+[2026-02-24 10:40:39] Request Method: GET
+------------------------
+[2026-02-24 10:40:39] GET parameters:
+Array
+(
+    [status] => close
+)
+
+------------------------
+[2026-02-24 10:40:39] POST parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:39] Session ID: No session
+------------------------
+[2026-02-24 10:40:39] Checking config file paths...
+------------------------
+[2026-02-24 10:40:39] Config file exists
+------------------------
+[2026-02-24 10:40:39] Functions file exists
+------------------------
+[2026-02-24 18:40:39] Config and functions loaded successfully
+------------------------
+[2026-02-24 18:40:39] Database connection OK
+------------------------
+[2026-02-24 18:40:39] User is logged in as admin
+------------------------
+[2026-02-24 18:40:39] Filters applied:
+Array
+(
+    [tab] => all
+    [search] => 
+    [status] => close
+    [type] => 
+    [dateFrom] => 
+    [dateTo] => 
+    [isEmailOnly] => 
+)
+
+------------------------
+[2026-02-24 18:40:39] Fetching statistics...
+------------------------
+[2026-02-24 18:40:39] Statistics:
+Array
+(
+    [pending] => 0
+    [closed_today] => 0
+    [is_email] => 0
+    [total] => 0
+)
+
+------------------------
+[2026-02-24 18:40:39] Where SQL: 1=1 AND status = ?
+------------------------
+[2026-02-24 18:40:39] Query params:
+Array
+(
+    [0] => close
+)
+
+------------------------
+[2026-02-24 18:40:39] Total records: 0, Total pages: 0
+------------------------
+[2026-02-24 18:40:39] Fetch query: SELECT * FROM network_tickets WHERE 1=1 AND status = ? ORDER BY date_received DESC LIMIT 10 OFFSET 0
+------------------------
+[2026-02-24 18:40:39] Fetched 0 tickets for current page
+------------------------
+[2026-02-24 18:40:39] Checking layout components...
+------------------------
+[2026-02-24 18:40:39] Layout file exists
+------------------------
+[2026-02-24 18:40:39] Rendering page...
+------------------------
+[2026-02-24 18:40:39] === PAGE RENDER START ===
+
+------------------------
+[2026-02-24 18:40:39] === PAGE RENDER COMPLETE ===
+
+------------------------
+[2026-02-24 10:40:41] === TERABIT TRACKER PAGE LOADED ===
+------------------------
+[2026-02-24 10:40:41] Request URI: /admin/terabit_tracker.php
+------------------------
+[2026-02-24 10:40:41] Request Method: GET
+------------------------
+[2026-02-24 10:40:41] GET parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:41] POST parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:41] Session ID: No session
+------------------------
+[2026-02-24 10:40:41] Checking config file paths...
+------------------------
+[2026-02-24 10:40:41] Config file exists
+------------------------
+[2026-02-24 10:40:41] Functions file exists
+------------------------
+[2026-02-24 18:40:41] Config and functions loaded successfully
+------------------------
+[2026-02-24 18:40:41] Database connection OK
+------------------------
+[2026-02-24 18:40:41] User is logged in as admin
+------------------------
+[2026-02-24 18:40:41] Filters applied:
+Array
+(
+    [tab] => all
+    [search] => 
+    [status] => 
+    [type] => 
+    [dateFrom] => 
+    [dateTo] => 
+    [isEmailOnly] => 
+)
+
+------------------------
+[2026-02-24 18:40:41] Fetching statistics...
+------------------------
+[2026-02-24 18:40:41] Statistics:
+Array
+(
+    [pending] => 0
+    [closed_today] => 0
+    [is_email] => 0
+    [total] => 0
+)
+
+------------------------
+[2026-02-24 18:40:41] Where SQL: 1=1
+------------------------
+[2026-02-24 18:40:41] Query params:
+Array
+(
+)
+
+------------------------
+[2026-02-24 18:40:41] Total records: 0, Total pages: 0
+------------------------
+[2026-02-24 18:40:41] Fetch query: SELECT * FROM network_tickets WHERE 1=1 ORDER BY date_received DESC LIMIT 10 OFFSET 0
+------------------------
+[2026-02-24 18:40:41] Fetched 0 tickets for current page
+------------------------
+[2026-02-24 18:40:41] Checking layout components...
+------------------------
+[2026-02-24 18:40:41] Layout file exists
+------------------------
+[2026-02-24 18:40:41] Rendering page...
+------------------------
+[2026-02-24 18:40:41] === PAGE RENDER START ===
+
+------------------------
+[2026-02-24 18:40:41] === PAGE RENDER COMPLETE ===
+
+------------------------
+[2026-02-24 10:40:50] === TERABIT TRACKER PAGE LOADED ===
+------------------------
+[2026-02-24 10:40:50] Request URI: /admin/terabit_tracker.php
+------------------------
+[2026-02-24 10:40:50] Request Method: GET
+------------------------
+[2026-02-24 10:40:50] GET parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:50] POST parameters:
+Array
+(
+)
+
+------------------------
+[2026-02-24 10:40:50] Session ID: No session
+------------------------
+[2026-02-24 10:40:50] Checking config file paths...
+------------------------
+[2026-02-24 10:40:50] Config file exists
+------------------------
+[2026-02-24 10:40:50] Functions file exists
+------------------------
+[2026-02-24 18:40:50] Config and functions loaded successfully
+------------------------
+[2026-02-24 18:40:50] Database connection OK
+------------------------
+[2026-02-24 18:40:50] User is logged in as admin
+------------------------
+[2026-02-24 18:40:50] Filters applied:
+Array
+(
+    [tab] => all
+    [search] => 
+    [status] => 
+    [type] => 
+    [dateFrom] => 
+    [dateTo] => 
+    [isEmailOnly] => 
+)
+
+------------------------
+[2026-02-24 18:40:50] Fetching statistics...
+------------------------
+[2026-02-24 18:40:50] Statistics:
+Array
+(
+    [pending] => 0
+    [closed_today] => 0
+    [is_email] => 0
+    [total] => 0
+)
+
+------------------------
+[2026-02-24 18:40:50] Where SQL: 1=1
+------------------------
+[2026-02-24 18:40:50] Query params:
+Array
+(
+)
+
+------------------------
+[2026-02-24 18:40:50] Total records: 0, Total pages: 0
+------------------------
+[2026-02-24 18:40:50] Fetch query: SELECT * FROM network_tickets WHERE 1=1 ORDER BY date_received DESC LIMIT 10 OFFSET 0
+------------------------
+[2026-02-24 18:40:50] Fetched 0 tickets for current page
+------------------------
+[2026-02-24 18:40:50] Checking layout components...
+------------------------
+[2026-02-24 18:40:50] Layout file exists
+------------------------
+[2026-02-24 18:40:50] Rendering page...
+------------------------
+[2026-02-24 18:40:50] === PAGE RENDER START ===
+
+------------------------
+[2026-02-24 18:40:50] === PAGE RENDER COMPLETE ===
+
+------------------------

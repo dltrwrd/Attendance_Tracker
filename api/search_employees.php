@@ -2,6 +2,11 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/functions.php';
 
+if (!isLoggedIn() || !isAdmin()) {
+    header('HTTP/1.1 403 Forbidden');
+    exit;
+}
+
 header('Content-Type: application/json');
 
 $query = isset($_GET['query']) ? trim($_GET['query']) : '';

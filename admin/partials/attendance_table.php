@@ -25,6 +25,18 @@ if (!isset($table)) {
 }
 if (!isset($perPage)) $perPage = 15;
 
+// === NEW: Calculate Today's Count for the counter on top right ===
+$todayField = ($type === 'tardiness') ? 'date_of_incident' : ($type === 'vto' ? 'shift_date' : 'date_of_absent');
+try {
+    $todayCountStmt = $pdo->prepare("SELECT COUNT(*) FROM $table WHERE DATE($todayField) = CURDATE()");
+    $todayCountStmt->execute();
+    $todayCount = $todayCountStmt->fetchColumn();
+} catch (Exception $e) {
+    $todayCount = 0;
+}
+$typeDisplay = $type === 'vto' ? 'VTO' : ucfirst($type);
+// =================================================================
+
 // Initialize where clauses and parameters
 $whereClauses = [];
 $params = [];
@@ -52,7 +64,9 @@ if (!empty($cardFilter)) {
             // Only add date filter if not already filtered by date
             if (empty($dateFrom) && empty($dateTo)) {
                 $dateField = ($table === 'tardiness') ? 'date_of_incident' : 'date_of_absent';
-                $whereClauses[] = "$dateField = CURDATE()";
+                $todayDate = date('Y-m-d'); // Use PHP's current date
+                $whereClauses[] = "$dateField = :today_date";
+                $params[':today_date'] = $todayDate;
             }
             break;
         }
@@ -213,9 +227,6 @@ try {
 
     // Only process for tardiness records - simplified version
     if ($type === 'tardiness') {
-        // The actual IR status updates now happen immediately when records are created/updated
-        // This section is kept minimal to ensure display consistency
-        
         // Group records by employee_id for display purposes only
         $employeeRecords = [];
         foreach ($records as $record) {
@@ -227,7 +238,6 @@ try {
         }
 
         // Just update the display array to match what's in the database
-        // No complex processing needed here anymore
         foreach ($employeeRecords as $employeeId => $empRecords) {
             foreach ($empRecords as $updatedRecord) {
                 foreach ($records as &$originalRecord) {
@@ -244,55 +254,69 @@ try {
 }
 ?>
 
+<!-- START HTML RENDER -->
 <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow">
+    
+    <!-- NEW HEADER: Today's Count & Column Toggler -->
+    <div class="flex justify-between items-center p-4 bg-gray-800/80 border-b border-gray-700/50">
+        <div class="text-sm font-bold text-gray-300 flex items-center gap-2">
+            <i class="fas fa-calendar-day text-primary-400 text-lg"></i>
+            Total <?= $typeDisplay ?> Today: 
+            <span class="bg-primary-500/20 text-primary-400 px-3 py-1 rounded-md border border-primary-500/30 shadow-inner">
+                <?= $todayCount ?>
+            </span>
+        </div>
+        <div id="columnToggleContainer" class="relative z-20">
+            <!-- Dropdown injected via JS -->
+        </div>
+    </div>
+    
     <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-700 w-full" style="zoom:85%">
+        <table class="min-w-full divide-y divide-gray-700 w-full transition-all duration-300" style="zoom:85%">
             <thead class="bg-gray-700">
                 <tr>
-                    <?php if ($type !== 'vto'): ?>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-8">
-                            <input type="checkbox" id="selectAllCheckbox">
-                        </th>
-                    <?php endif; ?>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">CXI Number</th>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-48">Full Name</th>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Department</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-8 transition-all">
+                        <input type="checkbox" id="selectAllCheckbox">
+                    </th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">CXI Number</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-48 transition-all">Full Name</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Department</th>
                     <?php if ($type === 'absenteeism'): ?>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Supervisor</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Operations Manager</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Date of Absence</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Sanction</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Reason</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Shift</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Followed Procedure</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Coverage Details</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Incident Report</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Supervisor</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Operations Manager</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Date of Absence</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Sanction</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Reason</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Shift</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Followed Procedure</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64 transition-all">Coverage Details</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Incident Report</th>
                     <?php elseif ($type === 'tardiness'): ?>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Operations Manager</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Date of Tardiness</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Type</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Minutes</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Shift</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Incident Report</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Operations Manager</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Date of Tardiness</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20 transition-all">Minutes</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Shift</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Incident Report</th>
                     <?php else: ?>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Shift Date</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Shift</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Time In</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Time Out</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">Worked (mins)</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">VTO (mins)</th>
-                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">VTO Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Shift Date</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Shift</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20 transition-all">Time In</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20 transition-all">Time Out</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Worked (mins)</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">VTO (mins)</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">VTO Type</th>
                     <?php endif; ?>
                     
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Reported By</th>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Time Reported</th>
-                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Actions</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Reported By</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Time Reported</th>
+                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-gray-800 divide-y divide-gray-700">
                 <?php if (empty($records)): ?>
                     <tr>
-                        <td colspan="<?= $type === 'absenteeism' ? 16 : ($type === 'tardiness' ? 13 : 14) ?>" class="px-6 py-8 text-center text-gray-400">
+                        <td colspan="<?= $type === 'absenteeism' ? 16 : ($type === 'tardiness' ? 13 : 15) ?>" class="px-6 py-8 text-center text-gray-400">
                             <i class="fas fa-users-slash text-3xl mb-3 opacity-50"></i>
                             <p class="text-lg">No records found</p>
                             <p class="text-sm mt-1" style="text-transform: uppercase;"><?= $type ?></p>
@@ -300,200 +324,268 @@ try {
                     </tr>
                 <?php else: ?>
                     <?php foreach ($records as $record): ?>
+                    
                     <?php if ($type === 'vto'): ?>
                         <tr class="hover:bg-gray-700/50">
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap text-center transition-all">
+                                <input type="checkbox" class="record-checkbox" data-id="<?= $record['id'] ?>">
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm font-medium text-gray-100" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['employee_id'] ?? '') ?>"><?= htmlspecialchars($record['employee_id'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['full_name'] ?? '') ?>"><?= htmlspecialchars($record['full_name'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['department'] ?? '') ?>"><?= htmlspecialchars($record['department'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= isset($record['shift_date']) ? date('M d, Y', strtotime($record['shift_date'])) : '' ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['shift'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['time_in'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['time_out'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['mins_of_work'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['vto_mins'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
-                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full <?= $record['vto_type'] === 'REALTIME' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' ?>" title="<?= htmlspecialchars($record['vto_type'] ?? '') ?>">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+                                <?php
+                                $vtoColor = 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30';
+                                $vtoTypeUpper = strtoupper(trim($record['vto_type'] ?? ''));
+                                if ($vtoTypeUpper === 'REALTIME') {
+                                    $vtoColor = 'bg-green-500/20 text-green-300 border border-green-500/30';
+                                } elseif ($vtoTypeUpper === 'REALTIME - WD' || $vtoTypeUpper === 'REALTIME WD') {
+                                    $vtoColor = 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+                                }
+                                ?>
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full <?= $vtoColor ?>" title="<?= htmlspecialchars($record['vto_type'] ?? '') ?>">
                                     <?= htmlspecialchars($record['vto_type'] ?? '') ?> 
                                 </span>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" title="<?= htmlspecialchars($record['sub_name'] ?? '') ?>"><?= htmlspecialchars($record['sub_name'] ?? '') ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= isset($record['timestamp']) ? date('g:i A', strtotime($record['timestamp'])) : '' ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <a href="vto_form.php?id=<?= $record['id'] ?? '' ?>" title="Edit record" class="text-primary-500 hover:text-primary-400 mr-3">
+                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium transition-all">
+                                <?php if ($type === 'absenteeism'): ?>
+                                    <?php if (!$record['email_sent']): ?>
+                                        <a href="send_email.php?send_email=<?= $record['id'] ?>&type=<?= $type ?>" onclick="return confirmSendEmail(event, this.href)" title="Send Email" class="text-blue-500 hover:text-blue-400 mr-3">
+                                            <i class="fas fa-envelope"></i>
+                                        </a>
+                                    <?php else: ?>
+                                        <span title="Email sent on <?= date('M d, Y g:i A', strtotime($record['email_sent_at'])) ?>" class="text-green-500 mr-3">
+                                            <i class="fas fa-check-circle"></i>
+                                        </span>
+                                    <?php endif; ?>
+                                    <button onclick="copyAbsentReport(<?= $record['id'] ?>)" class="text-blue-400 hover:text-blue-300 mr-3" title="Copy Absent Report" style="background: none; border: none; cursor: pointer;">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                <?php endif; ?>
+    
+                                <!-- FIRE BUTTON -->
+                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>" title="Fire Employee" class="text-red-600 hover:text-red-500 mr-3" onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>')">
+                                    <i class="fas fa-fire"></i>
+                                </a>
+    
+                                <a href="vto_form.php?id=<?= $record['id'] ?>&type=<?= $type ?>" title="Edit record" class="text-primary-500 hover:text-primary-400 mr-3">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="#" onclick="event.preventDefault(); showHistoryModal(<?= $record['id'] ?? '' ?>, 'vto')" title="View History" class="text-purple-500 hover:text-purple-400 mr-3">
+                                <a href="#" onclick="event.preventDefault(); showHistoryModal(<?= $record['id'] ?>, '<?= $type ?>')" title="View History" class="text-purple-500 hover:text-purple-400 mr-3">
                                     <i class="fas fa-history"></i>
                                 </a>
-                                <a href="#" onclick="event.preventDefault(); showDeleteModal(<?= $record['id'] ?? '' ?>, 'vto')" class="text-red-500 hover:text-red-400" title="Delete record">
+                                <a href="#" onclick="event.preventDefault(); showDeleteModal(<?= $record['id'] ?>, '<?= $type ?>')" class="text-red-500 hover:text-red-400" title="Delete record">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </td>
                         </tr>
+                        
                     <?php else: ?>
                         <tr class="hover:bg-gray-700/50">
-                            <td class="px-4 py-4 whitespace-nowrap text-center">
+                            <td class="px-4 py-4 whitespace-nowrap text-center transition-all">
                                 <input type="checkbox" class="record-checkbox" data-id="<?= $record['id'] ?>">
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm font-medium text-gray-100" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['employee_id']) ?>"><?= htmlspecialchars($record['employee_id']) ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['full_name']) ?>"><?= htmlspecialchars($record['full_name']) ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['department']) ?>"><?= htmlspecialchars($record['department']) ?></div>
                             </td>
 
                             <?php if ($type === 'absenteeism'): ?>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['supervisor']) ?>"><?= htmlspecialchars($record['supervisor']) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['operation_manager']) ?>"><?= htmlspecialchars($record['operation_manager']) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= date('M d, Y', strtotime($record['date_of_absent'])) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['sanction']) ?>"><?= htmlspecialchars($record['sanction']) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['reason']) ?>"><?= htmlspecialchars($record['reason']) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= htmlspecialchars($record['shift']) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full  <?= $record['follow_call_in_procedure'] === 'NO' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-green-500/20 text-green-300 border border-green-500/30' ?>">
-                                        <?= $record['follow_call_in_procedure'] ?>
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
+                                    <?php
+                                    $procVal = strtoupper($record['follow_call_in_procedure'] ?? '');
+                                    if ($procVal === 'NO') {
+                                        $procClass = 'bg-red-500/20 text-red-300 border border-red-500/30';
+                                    } elseif (strpos($procVal, 'YES') !== false) {
+                                        $procClass = 'bg-green-500/20 text-green-300 border border-green-500/30';
+                                    } elseif (strpos($procVal, 'PENDING') !== false || strpos($procVal, 'ADVISE') !== false) {
+                                        $procClass = 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30';
+                                    } else {
+                                        $procClass = 'bg-green-500/20 text-green-300 border border-green-500/30';
+                                    }
+                                    ?>
+                                    <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full <?= $procClass ?>">
+                                        <?= htmlspecialchars($record['follow_call_in_procedure']) ?>
                                     </span>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
-                                    <div class="text-sm text-gray-300" 
-                                        title="<?php
-                                        // Combine all coverage fields into one display for tooltip
-                                        $coverageDetails = [];
-                                        for ($i = 1; $i <= 4; $i++) {
-                                            $coverageField = "coverage_{$i}";
-                                            $coverageTypeField = "coverage_type_{$i}";
-                                            $coverageDetailsField = "coverage_details_{$i}";
-                                            
-                                            if (!empty($record[$coverageField])) {
-                                                $coverageText = htmlspecialchars($record[$coverageField]);
-                                                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
-                                                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
-                                                
-                                                $detail = $coverageText;
-                                                if (!empty($coverageType) && $coverageType !== '-') {
-                                                    $detail .= " ($coverageType";
-                                                    if (!empty($coverageDetail)) {
-                                                        $detail .= " - $coverageDetail";
-                                                    }
-                                                    $detail .= ")";
-                                                }
-                                                
-                                                $coverageDetails[] = $detail;
-                                            }
-                                        }
-                                        
-                                        if (!empty($coverageDetails)) {
-                                            echo implode(' | ', $coverageDetails);
-                                        } else {
-                                            echo '-';
-                                        }
-                                        ?>">
-                                        <?php
-                                        // Combine all coverage fields into one display for visible content
-                                        $coverageDetails = [];
-                                        for ($i = 1; $i <= 4; $i++) {
-                                            $coverageField = "coverage_{$i}";
-                                            $coverageTypeField = "coverage_type_{$i}";
-                                            $coverageDetailsField = "coverage_details_{$i}";
-                                            
-                                            if (!empty($record[$coverageField])) {
-                                                $coverageText = htmlspecialchars($record[$coverageField]);
-                                                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
-                                                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
-                                                
-                                                $detail = $coverageText;
-                                                if (!empty($coverageType) && $coverageType !== '-') {
-                                                    $detail .= " ($coverageType";
-                                                    if (!empty($coverageDetail)) {
-                                                        $detail .= " - $coverageDetail";
-                                                    }
-                                                    $detail .= ")";
-                                                }
-                                                
-                                                $coverageDetails[] = $detail;
-                                            }
-                                        }
-                                        
-                                        if (!empty($coverageDetails)) {
-                                            echo implode('<br>', $coverageDetails);
-                                        } else {
-                                            echo '-';
-                                        }
-                                        ?>
+<td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+    <div class="text-sm text-gray-300" 
+        title="<?php
+        // Combine all coverage fields into one display for tooltip
+        $coverageDetails = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $coverageField = "coverage_{$i}";
+            $coverageTypeField = "coverage_type_{$i}";
+            $coverageDetailsField = "coverage_details_{$i}";
+            
+            if (!empty($record[$coverageField])) {
+                $coverageText = htmlspecialchars($record[$coverageField]);
+                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
+                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
+                
+                // Format based on coverage type
+                if ($coverageType === 'PENDING') {
+                    // For PENDING, just show "PENDING" without parentheses
+                    $detail = $coverageText;
+                } else {
+                    $detail = $coverageText;
+                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
+                        $detail .= " ($coverageType";
+                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
+                            $detail .= " - $coverageDetail";
+                        }
+                        $detail .= ")";
+                    }
+                }
+                
+                $coverageDetails[] = $detail;
+            }
+        }
+        
+        if (!empty($coverageDetails)) {
+            echo implode(' | ', $coverageDetails);
+        } else {
+            echo '-';
+        }
+        ?>">
+        <?php
+        // Combine all coverage fields into one display for visible content
+        $coverageDetails = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $coverageField = "coverage_{$i}";
+            $coverageTypeField = "coverage_type_{$i}";
+            $coverageDetailsField = "coverage_details_{$i}";
+            
+            if (!empty($record[$coverageField])) {
+                $coverageText = htmlspecialchars($record[$coverageField]);
+                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
+                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
+                
+                // Format based on coverage type
+                if ($coverageType === 'PENDING') {
+                    // For PENDING, just show "PENDING" without parentheses
+                    $detail = $coverageText;
+                } else {
+                    $detail = $coverageText;
+                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
+                        $detail .= " ($coverageType";
+                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
+                            $detail .= " - $coverageDetail";
+                        }
+                        $detail .= ")";
+                    }
+                }
+                
+                $coverageDetails[] = $detail;
+            }
+        }
+        
+        if (!empty($coverageDetails)) {
+            echo implode('<br>', $coverageDetails);
+        } else {
+            echo '-';
+        }
+        ?>
+    </div>
+</td>
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+                                    <div class="text-sm text-gray-300 flex items-center" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['ir_form'] ?? '') ?>">
+                                        <?php if (strpos(strtoupper($record['ir_form'] ?? ''), 'FOR IR') !== false): ?>
+                                            <div class="w-2 h-2 rounded-full bg-red-500 mr-2 flex-shrink-0 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]" title="Action Required: For IR"></div>
+                                        <?php endif; ?>
+                                        <span class="truncate"><?= htmlspecialchars($record['ir_form'] ?? '') ?></span>
                                     </div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
-                                    <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= $record['ir_form'] ?>"><?= $record['ir_form'] ?></div>
-                                </td>
                             <?php elseif ($type === 'tardiness'): ?>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= $record['operation_manager'] ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= date('M d, Y', strtotime($record['date_of_incident'])) ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full  <?= $record['types'] === 'Late' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30' ?>">
                                         <?= $record['types'] ?>
                                     </span>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= $record['minutes_late'] ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
+                                <td class="px-4 py-4 whitespace-nowrap transition-all">
                                     <div class="text-sm text-gray-300"><?= $record['shift'] ?></div>
                                 </td>
-                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
-                                    <div class="text-sm text-gray-300" style="text-transform: uppercase;" title="<?= $record['ir_form'] ?>"><?= $record['ir_form'] ?></div>
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+                                    <div class="text-sm text-gray-300 flex items-center" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['ir_form'] ?? '') ?>">
+                                        <?php if (strpos(strtoupper($record['ir_form'] ?? ''), 'FOR IR') !== false): ?>
+                                            <div class="w-2 h-2 rounded-full bg-red-500 mr-2 flex-shrink-0 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]" title="Action Required: For IR"></div>
+                                        <?php endif; ?>
+                                        <span class="truncate"><?= htmlspecialchars($record['ir_form'] ?? '') ?></span>
+                                    </div>
                                 </td>
                             <?php endif; ?>
                             
-                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                            <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                 <div class="text-sm text-gray-300" title="<?= htmlspecialchars($record['sub_name']) ?>"><?= htmlspecialchars($record['sub_name']) ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap">
+                            <td class="px-4 py-4 whitespace-nowrap transition-all">
                                 <div class="text-sm text-gray-300"><?= date('g:i A', strtotime($record['timestamp'])) ?></div>
                             </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium transition-all">
                                 <?php if (!$record['email_sent']): ?>
-                                    <a href="send_email.php?send_email=<?= $record['id'] ?>&type=<?= $type ?>" title="Send Email" class="text-blue-500 hover:text-blue-400 mr-3">
+                                    <a href="send_email.php?send_email=<?= $record['id'] ?>&type=<?= $type ?>" onclick="return confirmSendEmail(event, this.href)" title="Send Email" class="text-blue-500 hover:text-blue-400 mr-3">
                                         <i class="fas fa-envelope"></i>
                                     </a>
                                 <?php else: ?>
@@ -501,6 +593,23 @@ try {
                                         <i class="fas fa-check-circle"></i>
                                     </span>
                                 <?php endif; ?>
+                                    <?php if ($type === 'absenteeism'): ?>
+                                        <button onclick="copyAbsentReport(<?= $record['id'] ?>)" 
+                                                class="text-blue-400 hover:text-blue-300 mr-3" 
+                                                title="Copy Absent Report"
+                                                style="background: none; border: none; cursor: pointer;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                
+                                <!-- FIRE BUTTON -->
+                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>" 
+                                    title="Fire Employee" 
+                                    class="text-red-600 hover:text-red-500 mr-3" 
+                                    onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>')">
+                                        <i class="fas fa-fire"></i>
+                                </a>
+                                
                                 <a href="attendance_form.php?id=<?= $record['id'] ?>&type=<?= $type ?>" title="Edit record" class="text-primary-500 hover:text-primary-400 mr-3">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -559,7 +668,6 @@ try {
 <?php endif; ?>
 
 
-
 <div id="historyModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl w-full max-w-md">
         <!-- Card Header -->
@@ -596,3 +704,246 @@ try {
         scrollbar-width: none;
     }
 </style>
+
+<script>
+// Fire button functionality - simple confirmation
+function confirmFire(recordId, recordType) {
+    return confirm('Are you sure you want to fire this record?');
+}
+
+// History modal functions
+function showHistoryModal(recordId, recordType) {
+    const modal = document.getElementById('historyModal');
+    const loader = `
+        <div class="relative">
+            <div class="absolute -left-2.5 top-0 h-5 w-5 rounded-full bg-gray-500 border-4 border-gray-800"></div>
+            <div class="ml-4">
+                <p class="text-sm text-gray-400">Loading history...</p>
+            </div>
+        </div>
+    `;
+    document.getElementById('historyTableBody').innerHTML = loader;
+    modal.classList.remove('hidden');
+    
+    fetch(`get_history.php?record_id=${recordId}&type=${recordType}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+            
+            if (data.length > 0) {
+                data.forEach(activity => {
+                    const initials = activity.sub_name.split(' ').map(n => n[0]).join('').toUpperCase();
+                    const item = `
+                        <div class="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700 mb-4 ">
+                            <!-- User & Activity Info -->
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0 h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+                                    ${initials.substring(0, 2)}
+                                </div>
+                                <div class="ml-4">
+                                    <h4 class="text-base font-semibold text-gray-100">${activity.sub_name}</h4>
+                                    <p class="text-sm text-gray-300 mt-1">${activity.activity_description}</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Timeline Indicator & Timestamp -->
+                            <div class="relative ml-10 mt-3">
+                                <div class="absolute -left-2.5 top-0 h-5 w-5 rounded-full bg-blue-600 border-4 border-gray-800"></div>
+                                <div class="ml-4">
+                                    <p class="text-xs text-gray-400">
+                                        ${new Date(activity.activity_time).toLocaleString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric', 
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    tbody.insertAdjacentHTML('beforeend', item);
+                });
+            } else {
+                tbody.innerHTML = `
+                    <div class="relative">
+                        <div class="absolute -left-2.5 top-0 h-5 w-5 rounded-full bg-gray-500 border-4 border-gray-800"></div>
+                        <div class="ml-4">
+                            <p class="text-sm text-gray-400">No history found for this record</p>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = `
+                <div class="relative">
+                    <div class="absolute -left-2.5 top-0 h-5 w-5 rounded-full bg-red-600 border-4 border-gray-800"></div>
+                    <div class="ml-4">
+                        <p class="text-sm text-red-400">Error loading history: ${error.message}</p>
+                    </div>
+                </div>
+            `;
+        });
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.add('hidden');
+}
+
+// Delete modal functions
+function showDeleteModal(recordId, recordType = '') {
+    const modal = `
+        <div id="deleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl w-full max-w-md">
+                <div class="px-6 py-6">
+                    <h3 class="text-lg font-bold text-gray-100 mb-4">Confirm Deletion</h3>
+                    <p class="text-gray-300 mb-4">Are you sure you want to delete this record?</p>
+                    <form method="post" action="attendance.php?delete=${recordId}${recordType ? '&type=' + recordType : ''}" class="space-y-4">
+                        <div>
+                            <label for="delete_password" class="block text-sm font-medium text-gray-300 mb-1">To confirm please enter the KEY:</label>
+                            <input type="password" name="delete_password" id="delete_password" 
+                                   class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-200" required>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeDeleteModal()" 
+                                    class="px-4 py-2 bg-gray-600 text-gray-100 rounded-md hover:bg-gray-500">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-500">
+                                Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modal);
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Close modal when clicking outside or pressing Escape
+document.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('historyModal')) {
+        closeHistoryModal();
+    }
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !document.getElementById('historyModal').classList.contains('hidden')) {
+        closeHistoryModal();
+    }
+});
+
+
+function copyAbsentReport(recordId) {
+    // Get the current script's path
+    const currentPath = window.location.pathname;
+    // Get the directory of the current script
+    const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    
+    // Construct the URL to the PHP file in the same directory
+    fetch(basePath + '../admin/partials/get_absent_record.php?id=' + recordId)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const report = formatAbsentReport(data.record);
+                navigator.clipboard.writeText(report)
+                    .then(() => {
+                        alert('Report copied to clipboard!');
+                    })
+                    .catch(err => {
+                        console.error('Clipboard error:', err);
+                        alert('Failed to copy to clipboard. Please try again.');
+                    });
+            } else {
+                console.error('Failed to fetch record:', data.message);
+                alert('Failed to fetch record: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while fetching the record. Check console for details.');
+        });
+}
+
+function formatAbsentReport(record) {
+    const absentDate = new Date(record.date_of_absent);
+    const formattedDate = absentDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+    }).toUpperCase().replace(',', '');
+    
+    const sanction = record.sanction || 'ABSENCE';
+    const shiftTime = record.shift || '6:00 AM - 3:00 PM';
+    
+    // Get all coverage information with types
+    let coverageEntries = [];
+    
+    // Check all 4 coverage fields
+    for (let i = 1; i <= 4; i++) {
+        const coverageField = `coverage_${i}`;
+        const coverageTypeField = `coverage_type_${i}`;
+        const coverageDetailsField = `coverage_details_${i}`;
+        
+        if (record[coverageField] && record[coverageField].trim() !== '') {
+            let coverage = record[coverageField];
+            const coverageType = record[coverageTypeField] || '';
+            const coverageDetail = record[coverageDetailsField] || '';
+            
+            // Format based on coverage type
+            if (coverageType === 'PENDING') {
+                // For PENDING, just show the name
+                coverageEntries.push(coverage);
+            } else if (coverageType && coverageType !== '-' && coverageType !== '') {
+                // For other types, include the type in parentheses
+                if (coverageDetail && coverageDetail !== '-' && coverageDetail !== '') {
+                    coverageEntries.push(`${coverage} (${coverageType} - ${coverageDetail})`);
+                } else {
+                    coverageEntries.push(`${coverage} (${coverageType})`);
+                }
+            } else {
+                // No type specified
+                coverageEntries.push(coverage);
+            }
+        }
+    }
+    
+    // Join multiple coverage entries if they exist
+    let coverageText = coverageEntries.length > 0 ? coverageEntries.join(' | ') : 'PENDING';
+    
+    // Format the report with proper line breaks
+    return `${sanction}\n\n` +
+           `Name of Employee: ${record.full_name || ''}\n` +
+           `DEPARTMENT: ${record.department || ''}\n` +
+           `SUPERVISOR: ${record.supervisor || ''}\n` +
+           `OM: ${record.operation_manager || ''}\n` +
+           `Date of Absenteeism: ${formattedDate}\n` +
+           `Sanction: ${sanction}\n` +
+           `Reason for Absence: ${record.reason || ''}\n` +
+           `Scheduled Shift: ${shiftTime}\n` +
+           `Covered/Uncovered?: ${coverageText}`;
+}
+</script>

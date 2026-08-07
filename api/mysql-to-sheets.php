@@ -86,24 +86,27 @@ try {
         $stmt->execute();
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } elseif ($type === 'ticket') {
-        $stmt = $pdo->prepare("SELECT * FROM ticket ORDER BY Timestamp ASC");
+        $stmt = $pdo->prepare("SELECT * FROM ticket");
         $stmt->execute();
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        usort($data, function($a, $b) {
-            $timeA = strtotime($a['timestamp']);
-            $timeB = strtotime($b['timestamp']);
-            
-            $dateCompare = strcmp($a['Timestamp'], $b['Timestamp']);
-            if ($dateCompare !== 0) {
-                return $dateCompare;
-            }
-            
-            return $timeA - $timeB;
-        });
-        
     } else {
         throw new Exception("Invalid data type requested");
+    }
+    // Auto-reset fired triggers so the sheet fetches them exactly once, avoiding race conditions with background cron/resets
+    if (in_array($type, ['absenteeism', 'tardiness', 'vto_tracker'])) {
+        $table = ($type === 'tardiness') ? 'tardiness' : ($type === 'vto_tracker' ? 'vto_tracker' : 'absenteeism');
+        $firedIds = [];
+        foreach ($data as $row) {
+            if (isset($row['fire_trigger']) && strtolower($row['fire_trigger']) === 'fire') {
+                $firedIds[] = $row['id'];
+            }
+        }
+        if (!empty($firedIds)) {
+            $placeholders = implode(',', array_fill(0, count($firedIds), '?'));
+            $resetStmt = $pdo->prepare("UPDATE $table SET fire_trigger = NULL WHERE id IN ($placeholders)");
+            $resetStmt->execute($firedIds);
+        }
     }
     
     echo json_encode(['success' => true, 'data' => $data]);

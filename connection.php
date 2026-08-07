@@ -1,8 +1,8 @@
 <?php
-$host = "localhost";
-$dbname = "auth_system";
-$username = "root";
-$password = "";
+$host = '127.0.0.1';
+$dbname = 'u865665685_cxi_database';
+$username = 'u865665685_cxi_database';
+$password = 'Wea_dayaday05';
 
 $con = mysqli_connect($host, $username, $password, $dbname);
 

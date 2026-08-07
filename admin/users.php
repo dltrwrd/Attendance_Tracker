@@ -86,7 +86,7 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'users';
     <main class="p-6">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-white">Manage Team Members</h1>
-            <a href="profile.php?action=create&type=<?= $currentTab ?>" class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors duration-200">
+            <a href="profile.php?action=create&type=users" id="addNewButton" class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors duration-200">
                 <i class="fas fa-plus mr-2"></i> Add New
             </a>
         </div>
@@ -192,6 +192,9 @@ class UsersManager {
             });
         });
 
+        // Update Add New button URL
+        this.updateAddNewButton();
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey) {
@@ -202,11 +205,21 @@ class UsersManager {
                         break;
                     case 'n':
                         e.preventDefault();
-                        window.location.href = `profile.php?action=create&type=${this.currentTab}`;
+                        const addNewButton = document.getElementById('addNewButton');
+                        if (addNewButton) {
+                            window.location.href = addNewButton.href;
+                        }
                         break;
                 }
             }
         });
+    }
+
+    updateAddNewButton() {
+        const addNewButton = document.getElementById('addNewButton');
+        if (addNewButton) {
+            addNewButton.href = `profile.php?action=create&type=${this.currentTab}`;
+        }
     }
 
     handleSearchChange(value) {
@@ -240,6 +253,9 @@ class UsersManager {
         this.loadUsers(1);
         this.updateUrl(1);
         history.pushState(null, '', `?tab=${tab}`);
+        
+        // Update the Add New button URL
+        this.updateAddNewButton();
     }
 
     async loadUsers(page = 1) {
@@ -323,6 +339,9 @@ class UsersManager {
             activeTab.classList.add('border-primary-500', 'text-primary-400');
             activeTab.classList.remove('border-transparent', 'text-gray-400');
         }
+        
+        // Update Add New button
+        this.updateAddNewButton();
         
         this.loadUsers(initialPage);
     }

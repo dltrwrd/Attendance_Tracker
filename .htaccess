@@ -1,0 +1,28 @@
+<IfModule mod_php.c>
+    php_value max_execution_time 360
+    php_value max_input_time 360
+    php_value memory_limit 2048M
+    php_value upload_max_filesize 2048M
+    php_value post_max_size 2048M
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Critical Nginx timeout headers
+    Header set X-Proxy-Timeout "360"
+    Header set Proxy-Timeout "360"
+    Header set X-Forwarded-Timeout "360"
+</IfModule>
+
+<IfModule mod_env.c>
+    SetEnv PROXY_TIMEOUT 360
+    SetEnv NGINX_PROXY_TIMEOUT 360
+    SetEnv proxy_read_timeout 360
+</IfModule>
+
+# Force longer timeouts for specific paths (if known)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # If you know which URL is causing timeouts, target it specifically
+    # RewriteCond %{REQUEST_URI} ^/slow-process-endpoint/
+    # RewriteRule .* - [E=NGINX_READ_TIMEOUT:360]
+</IfModule>

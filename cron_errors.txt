@@ -1,0 +1,4 @@
+2025-11-18 19:05:03 - ERROR in cron job: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fire_trigger' in 'WHERE'
+2025-11-18 19:06:03 - ERROR in cron job: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fire_trigger' in 'WHERE'
+2025-11-18 19:07:03 - ERROR in cron job: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'trigger_date' in 'WHERE'
+2025-11-18 19:08:02 - ERROR in cron job: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fire_trigger' in 'WHERE'

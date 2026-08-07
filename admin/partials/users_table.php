@@ -59,7 +59,7 @@ $offset = ($page - 1) * $perPage;
 
 // Get paginated records
 try {
-    $query = "SELECT * FROM $table $searchQuery WHERE role = 'admin' ORDER BY is_active = 0, created_at DESC LIMIT :limit OFFSET :offset";
+    $query = "SELECT * FROM $table $searchQuery ORDER BY is_active = 0, created_at DESC LIMIT :limit OFFSET :offset";
     $stmt = $pdo->prepare($query);
     
     if (!empty($search)) {
@@ -85,12 +85,12 @@ try {
                     <?php if ($type === 'users'): ?>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">SLT</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fullname</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User / Fullname</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" style="display: none;">Role</th>
                     <?php else: ?>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">CXI ID</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fullname</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User / Fullname</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Department</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
                     <?php endif; ?>
@@ -113,24 +113,45 @@ try {
                     <tr class="hover:bg-gray-700/50 transition-colors duration-150">
                         <?php if ($type === 'users'): ?>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div class="text-sm font-medium text-gray-100 uppercase tracking-wide"><?= htmlspecialchars($record['username']) ?></div>
-                                    <?php if ($type === 'users'): ?>
-                                        <span class="ml-2 relative flex h-3 w-3">
-                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 online-indicator" 
-                                                data-user-id="<?= $record[$idColumn] ?>" 
-                                                style="display: none;"></span>
-                                            <span class="relative inline-flex rounded-full h-3 w-3 bg-gray-400 online-status transition-colors duration-300" 
-                                                data-user-id="<?= $record[$idColumn] ?>"></span>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
+                                <div class="text-sm font-medium text-gray-100 uppercase tracking-wide"><?= htmlspecialchars($record['username']) ?></div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-300"><?= htmlspecialchars($record['sub_name']) ?></div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-300"><?= htmlspecialchars($record['fullname']) ?></div>
+                                <div class="flex items-center space-x-3">
+                                    
+                                    <!-- Mini Profile Photo (Clickable) -->
+                                    <div class="relative group cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:z-10" 
+                                         onclick="openProfileModal(<?= $record[$idColumn] ?>)" 
+                                         title="View Profile">
+                                        
+                                        <div class="w-10 h-10 rounded-full border-2 border-gray-700 overflow-hidden bg-gray-800 shadow-sm flex-shrink-0">
+                                            <?php 
+                                            $photoPath = !empty($record['display_photo']) 
+                                                ? '../components/profile/' . htmlspecialchars($record['display_photo']) 
+                                                : '../components/profile/default.jpg'; 
+                                            ?>
+                                            <img src="<?= $photoPath ?>" alt="<?= htmlspecialchars($record['fullname']) ?>" class="w-full h-full object-cover">
+                                        </div>
+                                        
+                                        <!-- Live Online Status Dot -->
+                                        <span class="online-indicator animate-ping absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 opacity-75 pointer-events-none" style="display: none;"></span>
+                                        <span class="online-status absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-800 bg-gray-400" data-user-id="<?= $record[$idColumn] ?>"></span>
+                                    
+                                    </div>
+
+                                    <!-- User Name & Info -->
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer" onclick="openProfileModal(<?= $record[$idColumn] ?>)">
+                                            <?= htmlspecialchars($record['fullname']) ?>
+                                        </div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wider mt-0.5">
+                                            <?= htmlspecialchars($record['role'] ?? 'Member') ?>
+                                        </div>
+                                    </div>
+                                    
+                                </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-300 lowercase"><?= htmlspecialchars($record['slt_email']) ?></div>
@@ -146,7 +167,36 @@ try {
                                 <div class="text-sm font-medium text-gray-100 uppercase tracking-wide"><?= htmlspecialchars($record['cxi_id']) ?></div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-300 uppercase tracking-wide"><?= htmlspecialchars($record['fullname']) ?></div>
+                                <div class="flex items-center space-x-3">
+                                    
+                                    <!-- Mini Profile Photo (Clickable) -->
+                                    <div class="relative group cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:z-10" 
+                                         onclick="openProfileModal(<?= $record[$idColumn] ?>)" 
+                                         title="View Profile">
+                                        
+                                        <div class="w-10 h-10 rounded-full border-2 border-gray-700 overflow-hidden bg-gray-800 shadow-sm flex-shrink-0">
+                                            <?php 
+                                            $photoPath = !empty($record['display_photo']) 
+                                                ? '../components/profile/' . htmlspecialchars($record['display_photo']) 
+                                                : '../components/profile/default.jpg'; 
+                                            ?>
+                                            <img src="<?= $photoPath ?>" alt="<?= htmlspecialchars($record['fullname']) ?>" class="w-full h-full object-cover">
+                                        </div>
+                                        
+                                        <!-- Live Online Status Dot -->
+                                        <span class="online-indicator animate-ping absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 opacity-75 pointer-events-none" style="display: none;"></span>
+                                        <span class="online-status absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-800 bg-gray-400" data-user-id="<?= $record[$idColumn] ?>"></span>
+                                    
+                                    </div>
+
+                                    <!-- User Name -->
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer uppercase tracking-wide" onclick="openProfileModal(<?= $record[$idColumn] ?>)">
+                                            <?= htmlspecialchars($record['fullname']) ?>
+                                        </div>
+                                    </div>
+                                    
+                                </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-300 uppercase tracking-wide"><?= htmlspecialchars($record['department']) ?></div>

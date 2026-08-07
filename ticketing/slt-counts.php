@@ -1,9 +1,6 @@
 <?php
 
-$host = 'localhost';
-$db_name = 'auth_system';
-$username = 'root';
-$password = '';
+include('../connection.php');
 
 $currentYear = date('Y');
 $targetYear = isset($_POST['target_year']) ? (int)$_POST['target_year'] : $currentYear;

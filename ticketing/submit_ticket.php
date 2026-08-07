@@ -5,11 +5,11 @@ function submit_ticket(PDO $pdo, array $ticketData) {
         $query = "INSERT INTO ticket (
             Timestamp, Email_Address, Site, Affected_employee, EID, Issues_Concerning, 
             Issue_Details, Station_Number, TIME_RECEIVED, TIME_RESOLVED, SLT_on_DUTY, 
-            Week_Beginning, LOB, OM, Employee_name, Work_Number, Status, Urgency
+            Week_Beginning, LOB, OM, Employee_name, Work_Number, Status, sub_cat, Urgency, issue_img
         ) VALUES (
             :Timestamp, :Email_Address, :Site, :Affected_employee, :EID, :Issues_Concerning, 
             :Issue_Details, :Station_Number, :TIME_RECEIVED, :TIME_RESOLVED, :SLT_on_DUTY, 
-            :Week_Beginning, :LOB, :OM, :Employee_name, :Work_Number, :Status, :Urgency
+            :Week_Beginning, :LOB, :OM, :Employee_name, :Work_Number, :Status, :sub_cat, :Urgency, :issue_img
         )";
 
         $stmt = $pdo->prepare($query);
@@ -44,7 +44,9 @@ function submit_ticket(PDO $pdo, array $ticketData) {
             ':Employee_name' => $ticketData['Employee_name'],
             ':Work_Number' => $workNumber,
             ':Status' => $ticketData['Status'],
+            ':sub_cat' => $ticketData['sub_cat'],
             ':Urgency' => $ticketData['urgency'],
+            ':issue_img' => $ticketData['issue_img'] ?? null,
         ]);
 
         return true;

@@ -82,7 +82,6 @@ try {
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Infraction</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40">Reported By</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Created At</th>
-                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider w-32">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-gray-800 divide-y divide-gray-700">
@@ -140,14 +139,6 @@ try {
                             <div class="text-sm text-gray-300">
                                 <?= date('M d, Y g:i A', strtotime($record['created_at'])) ?>
                             </div>
-                        </td>
-                        <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <a href="incident_report_form.php?id=<?= $record['id'] ?>" title="Edit report" class="text-primary-500 hover:text-primary-400 mr-3">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                            <a href="#" onclick="event.preventDefault(); showDeleteModal(<?= $record['id'] ?>)" class="text-red-500 hover:text-red-400" title="Delete report">
-                                <i class="fas fa-trash"></i>
-                            </a>
                         </td>
                     </tr>
                     <?php endforeach; ?>
