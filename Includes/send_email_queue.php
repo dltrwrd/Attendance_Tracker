@@ -56,6 +56,7 @@ $batchSize = 20;
 $maxAttempts = 3;
 $sent = 0;
 $failed = 0;
+$results = []; // per-row outcome so the caller can show exactly who sent/failed, no reload needed
 
 try {
     $idsStmt = $pdo->query("SELECT id FROM email_queue WHERE status = 'pending' ORDER BY id LIMIT $batchSize");
@@ -103,12 +104,19 @@ try {
                     $pdo->prepare("UPDATE $table SET email_sent = 1, email_sent_at = NOW() WHERE id = ?")->execute([$row['source_id']]);
                 }
                 $sent++;
+                $results[] = ['source_type' => $row['source_type'], 'source_id' => $row['source_id'], 'to' => $row['to_emails'], 'status' => 'sent'];
             } catch (Exception $e) {
                 $attempts = $row['attempts'] + 1;
                 $newStatus = $attempts >= $maxAttempts ? 'failed' : 'pending';
+                $errorMsg = $mail->ErrorInfo ?: $e->getMessage();
                 $pdo->prepare("UPDATE email_queue SET status = ?, attempts = ?, error_message = ? WHERE id = ?")
-                    ->execute([$newStatus, $attempts, $mail->ErrorInfo ?: $e->getMessage(), $row['id']]);
+                    ->execute([$newStatus, $attempts, $errorMsg, $row['id']]);
                 $failed++;
+                // Only report as a final 'failed' result once retries are exhausted — a row
+                // that goes back to 'pending' will be retried on the next batch, not dropped.
+                if ($newStatus === 'failed') {
+                    $results[] = ['source_type' => $row['source_type'], 'source_id' => $row['source_id'], 'to' => $row['to_emails'], 'status' => 'failed', 'error' => $errorMsg];
+                }
             }
             usleep(200000); // throttle to ~5/sec so we don't get flagged/rate-limited by the SMTP provider
         }
@@ -122,7 +130,7 @@ try {
     if ($is_cli) {
         echo $logLine;
     } else {
-        echo json_encode(['sent' => $sent, 'failed' => $failed, 'counts' => $counts]);
+        echo json_encode(['sent' => $sent, 'failed' => $failed, 'counts' => $counts, 'results' => $results]);
     }
 } catch (Throwable $e) {
     file_put_contents($root_dir . '/cron_errors.txt', date('Y-m-d H:i:s') . " - send_email_queue: " . $e->getMessage() . "\n", FILE_APPEND);

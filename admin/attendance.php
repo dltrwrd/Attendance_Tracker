@@ -1385,6 +1385,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         const originalHTML = bulkEmailBtn.innerHTML;
                         bulkEmailBtn.disabled = true;
 
+                        // Swap a sent record's envelope icon for a green check live, in place —
+                        // no full page reload needed to see it update.
+                        function markRowSent(sourceId) {
+                            const checkbox = document.querySelector(`.record-checkbox[data-id="${sourceId}"]`);
+                            const row = checkbox ? checkbox.closest('tr') : null;
+                            const link = row ? row.querySelector(`a[href*="send_email.php?send_email=${sourceId}&"]`) : null;
+                            if (link) {
+                                const span = document.createElement('span');
+                                span.title = 'Email sent just now';
+                                span.className = 'text-green-500 mr-3';
+                                span.innerHTML = '<i class="fas fa-check-circle"></i>';
+                                link.replaceWith(span);
+                            }
+                        }
+
+                        const failedResults = [];
+                        let totalSent = 0;
+
                         // Drive the worker to completion here (batches of 20) instead of firing
                         // once — a >20-record selection would otherwise leave the rest sitting
                         // pending until Task Scheduler's next run or another button click.
@@ -1398,16 +1416,37 @@ document.addEventListener('DOMContentLoaded', function() {
                                         bulkEmailBtn.disabled = false;
                                         return;
                                     }
+                                    if (res.busy) {
+                                        // Another admin's kick (or Task Scheduler) is mid-batch right now —
+                                        // our rows are still queued, just wait our turn and check again.
+                                        bulkEmailBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Waiting (busy)...`;
+                                        setTimeout(processBatch, 1000);
+                                        return;
+                                    }
+                                    (res.results || []).forEach(r => {
+                                        if (r.status === 'sent') {
+                                            totalSent++;
+                                            markRowSent(r.source_id);
+                                        } else {
+                                            failedResults.push(r);
+                                        }
+                                    });
+
                                     const counts = res.counts || {};
                                     const stillPending = (counts.pending || 0) + (counts.sending || 0);
                                     if (stillPending > 0) {
                                         bulkEmailBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Sending... ${stillPending} left`;
                                         setTimeout(processBatch, 500);
                                     } else {
-                                        bulkEmailBtn.innerHTML = originalHTML;
                                         bulkEmailBtn.disabled = false;
-                                        alert(`Done. Sent ${counts.sent || 0}, failed ${counts.failed || 0}.`);
-                                        location.reload();
+                                        if (failedResults.length > 0) {
+                                            bulkEmailBtn.innerHTML = originalHTML;
+                                            const list = failedResults.map(r => `- ${r.to} (${r.source_type} #${r.source_id}): ${r.error}`).join('\n');
+                                            alert(`Sent ${totalSent}, but ${failedResults.length} failed after retries:\n${list}`);
+                                        } else {
+                                            bulkEmailBtn.innerHTML = `<i class="fas fa-check mr-2"></i> Sent ${totalSent}`;
+                                            setTimeout(() => { bulkEmailBtn.innerHTML = originalHTML; }, 3000);
+                                        }
                                     }
                                 })
                                 .catch(() => {
