@@ -695,15 +695,16 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
         <?php renderAlert(); ?>
         
         <!-- Filter Container -->
-        <div class="glass-panel p-5 rounded-2xl mb-8 shadow-xl">
+        <div class="glass-panel p-5 rounded-2xl mb-8 shadow-xl relative z-20">
             <div class="flex items-center justify-between mb-4 px-1">
                 <h3 class="text-gray-300 font-semibold text-sm flex items-center gap-2">
                     <i class="fas fa-filter text-gray-500"></i> Record Filters
                 </h3>
             </div>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">   
-                <div class="relative sm:col-span-2 lg:col-span-3">
+            <div class="overflow-x-auto">
+            <div class="grid gap-4 items-center" style="grid-template-columns: 2fr 1.2fr 1.2fr 1.5fr <?= ($currentTab !== 'vto') ? '1.5fr ' : '' ?>1.8fr auto; min-width: 1000px;">   
+                <div class="relative">
                     <input type="text" id="searchInput" 
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         placeholder="Search employee ID or name..."
@@ -711,110 +712,171 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                     <div class="absolute left-3 top-3 text-gray-500"><i class="fas fa-search"></i></div>
                 </div>
                 
-                <div class="lg:col-span-2 relative">
+                <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><i class="fas fa-calendar-alt"></i></div>
                     <input type="date" id="dateFrom" title="Date From"
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         value="<?= isset($_GET['from']) ? htmlspecialchars($_GET['from']) : '' ?>">
                 </div>
-                <div class="lg:col-span-2 relative">
+                <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><i class="fas fa-calendar-check"></i></div>
                     <input type="date" id="dateTo" title="Date To"
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         value="<?= isset($_GET['to']) ? htmlspecialchars($_GET['to']) : '' ?>">
                 </div>
                 
-                <div class="relative lg:col-span-2">
+                <div class="relative">
                     <select id="departmentFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm">
                         <option value="">All Departments</option>
                         <?php
-                        $stmt = $pdo->query("SELECT DISTINCT department FROM absenteeism UNION SELECT DISTINCT department FROM tardiness ORDER BY department");
-                        while ($row = $stmt->fetch()) {
-                            $selected = (isset($_GET['dept']) && $_GET['dept'] === $row['department']) ? 'selected' : '';
-                            echo '<option value="'.htmlspecialchars($row['department']).'" '.$selected.'>'.htmlspecialchars($row['department']).'</option>';
+                        $deptDateFrom = isset($_GET['from']) ? $_GET['from'] : '';
+                        $deptDateTo   = isset($_GET['to'])   ? $_GET['to']   : '';
+                        $deptTable    = ($currentTab === 'tardiness') ? 'tardiness' : (($currentTab === 'absenteeism') ? 'absenteeism' : null);
+                        if ($deptTable) {
+                            $deptDateField = ($currentTab === 'tardiness') ? 'date_of_incident' : 'date_of_absent';
+                            $deptWhere  = [];
+                            $deptParams = [];
+                            if (!empty($deptDateFrom)) { $deptWhere[] = "$deptDateField >= :df"; $deptParams[':df'] = $deptDateFrom; }
+                            if (!empty($deptDateTo))   { $deptWhere[] = "$deptDateField <= :dt"; $deptParams[':dt'] = $deptDateTo; }
+                            $deptSql = "SELECT DISTINCT department FROM $deptTable" . (!empty($deptWhere) ? ' WHERE ' . implode(' AND ', $deptWhere) : '') . " ORDER BY department";
+                            $deptStmt = $pdo->prepare($deptSql);
+                            foreach ($deptParams as $k => $v) { $deptStmt->bindValue($k, $v); }
+                            $deptStmt->execute();
+                            while ($row = $deptStmt->fetch()) {
+                                $selected = (isset($_GET['dept']) && $_GET['dept'] === $row['department']) ? 'selected' : '';
+                                echo '<option value="'.htmlspecialchars($row['department']).'" '.$selected.'>'.htmlspecialchars($row['department']).'</option>';
+                            }
+                        } else {
+                            $stmt = $pdo->query("SELECT DISTINCT department FROM absenteeism UNION SELECT DISTINCT department FROM tardiness ORDER BY department");
+                            while ($row = $stmt->fetch()) {
+                                $selected = (isset($_GET['dept']) && $_GET['dept'] === $row['department']) ? 'selected' : '';
+                                echo '<option value="'.htmlspecialchars($row['department']).'" '.$selected.'>'.htmlspecialchars($row['department']).'</option>';
+                            }
                         }
                         ?>
                     </select>
                     <div class="absolute right-3 top-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down text-xs"></i></div>
                 </div>
                 
-                <div class="relative lg:col-span-2 flex gap-4">
-                    <?php if ($currentTab !== 'vto' && $currentTab !== 'tardiness'): ?>
-                    <div class="relative flex-1">
-                        <select id="coverageFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm">
-                            <option value="">All Coverage</option>
-                            <?php
-                            $filterValues = ['UNCOVERED', 'PENDING', 'NO NEED', 'N/A', '-'];
-                            foreach ($filterValues as $value) {
-                                $selected = (isset($_GET['cov']) && $_GET['cov'] === $value) ? 'selected' : '';
-                                echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($value).'</option>';
-                            }
-                            ?>
-                        </select>
-                        <div class="absolute right-3 top-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down text-xs"></i></div>
-                    </div>
-                    <?php endif; ?>
+                <?php if ($currentTab !== 'vto'): ?>
+                <div class="relative">
+                    <select id="coverageFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm">
+                        <option value="">All Coverage</option>
+                        <?php
+                        $filterValues = ['UNCOVERED', 'PENDING', 'NO NEED', 'N/A', '-'];
+                        foreach ($filterValues as $value) {
+                            $selected = (isset($_GET['cov']) && $_GET['cov'] === $value) ? 'selected' : '';
+                            echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($value).'</option>';
+                        }
+                        ?>
+                    </select>
+                    <div class="absolute right-3 top-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down text-xs"></i></div>
+                </div>
+                <?php endif; ?>
 
-                    <div class="relative flex-1 <?= ($currentTab === 'vto') ? 'opacity-50 cursor-not-allowed' : '' ?>">
-                        <select id="irFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm" <?= ($currentTab === 'vto') ? 'disabled' : '' ?>>
-                            <option value="">All IR Forms</option>
+                <div class="relative z-[100] <?= ($currentTab === 'vto') ? 'opacity-50 cursor-not-allowed' : '' ?>" id="irFilterWrapper">
+                    <!-- Trigger Button -->
+                    <button type="button" id="irFilterBtn" <?= ($currentTab === 'vto') ? 'disabled' : '' ?>
+                        class="glass-input w-full px-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm flex items-center justify-between gap-2"
+                        onclick="toggleIrDropdown(event)">
+                        <span id="irFilterLabel" class="truncate text-gray-300">All IR Forms</span>
+                        <i class="fas fa-chevron-down text-gray-500 text-xs flex-shrink-0 transition-transform duration-200" id="irFilterChevron"></i>
+                    </button>
+
+                    <!-- Dropdown Panel -->
+                    <div id="irFilterDropdown" class="hidden bg-gray-900 border border-gray-700/60 rounded-xl shadow-2xl overflow-hidden" style="min-width:240px;">
+                        <!-- Search inside dropdown -->
+                        <div class="px-3 pt-3 pb-2 border-b border-gray-700/40">
+                            <input type="text" id="irSearchInput" placeholder="Search IR form..."
+                                class="w-full bg-gray-800/60 border border-gray-700/50 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:ring-1 focus:ring-primary-500"
+                                oninput="filterIrOptions(this.value)">
+                        </div>
+                        <!-- Options list -->
+                        <div id="irOptionsList" class="overflow-y-auto custom-scrollbar py-1" style="max-height:220px;">
                             <?php
-                            if ($currentTab === 'tardiness') {
-                                $standardOptions = [];
-                                $pendingOptions = [];
-                                $stmt = $pdo->query("SELECT DISTINCT ir_form FROM tardiness WHERE ir_form IS NOT NULL AND ir_form != ''");
-                                while ($row = $stmt->fetch()) {
-                                    $irForm = $row['ir_form'];
-                                    if ($irForm === 'FOR IR' || $irForm === 'FOR ACCUMULATION' || $irForm === 'PENDING') {
-                                        $standardOptions[$irForm] = $irForm;
-                                    } elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irForm, $matches)) {
-                                        $dateOnly = "PENDING / " . $matches[1];
-                                        $pendingOptions[$dateOnly] = $dateOnly;
+                            $selectedIrs  = isset($_GET['ir']) ? explode(',', $_GET['ir']) : [];
+                            $irDateFrom   = isset($_GET['from']) ? $_GET['from'] : '';
+                            $irDateTo     = isset($_GET['to'])   ? $_GET['to']   : '';
+
+                            if ($currentTab === 'tardiness' || $currentTab === 'absenteeism') {
+                                $irTable      = ($currentTab === 'tardiness') ? 'tardiness' : 'absenteeism';
+                                $irDateField  = ($currentTab === 'tardiness') ? 'date_of_incident' : 'date_of_absent';
+                                $irWhere      = ["ir_form IS NOT NULL", "ir_form != ''"];
+                                $irParams     = [];
+                                if (!empty($irDateFrom)) {
+                                    $irWhere[]              = "$irDateField >= :ir_date_from";
+                                    $irParams[':ir_date_from'] = $irDateFrom;
+                                }
+                                if (!empty($irDateTo)) {
+                                    $irWhere[]              = "$irDateField <= :ir_date_to";
+                                    $irParams[':ir_date_to'] = $irDateTo;
+                                }
+                                $irSql  = "SELECT DISTINCT ir_form FROM $irTable WHERE " . implode(' AND ', $irWhere);
+                                $irStmt = $pdo->prepare($irSql);
+                                foreach ($irParams as $k => $v) { $irStmt->bindValue($k, $v); }
+                                $irStmt->execute();
+                                $allIrForms = $irStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                                $stdOpts    = [];
+                                $noNeedOpts = [];
+                                $pendOpts   = [];
+                                foreach ($allIrForms as $irForm) {
+                                    if ($currentTab === 'tardiness') {
+                                        if (in_array($irForm, ['FOR IR', 'FOR ACCUMULATION', 'PENDING'])) {
+                                            $stdOpts[$irForm] = $irForm;
+                                        } elseif (strpos(strtoupper(trim($irForm)), 'NO NEED') === 0) {
+                                            $noNeedOpts[$irForm] = $irForm;
+                                        } elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irForm, $m)) {
+                                            $pk = 'PENDING / ' . $m[1];
+                                            $pendOpts[$pk] = $pk;
+                                        }
+                                    } else {
+                                        if ($irForm === 'FOR IR') {
+                                            $stdOpts[$irForm] = $irForm;
+                                        } elseif (strpos(strtoupper(trim($irForm)), 'NO NEED') === 0) {
+                                            $noNeedOpts[$irForm] = $irForm;
+                                        } elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irForm, $m)) {
+                                            $pk = 'PENDING / ' . $m[1];
+                                            $pendOpts[$pk] = $pk;
+                                        }
                                     }
                                 }
-                                krsort($pendingOptions);
-                                foreach ($standardOptions as $value => $label) {
-                                    $selected = (isset($_GET['ir']) && $_GET['ir'] === $value) ? 'selected' : '';
-                                    echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($label).'</option>';
-                                }
-                                foreach ($pendingOptions as $value => $label) {
-                                    $selected = (isset($_GET['ir']) && $_GET['ir'] === $value) ? 'selected' : '';
-                                    echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($label).'</option>';
-                                }
-                            } else if ($currentTab === 'absenteeism') {
-                                $standardOptions = [];
-                                $pendingOptions = [];
-                                $stmt = $pdo->query("SELECT DISTINCT ir_form FROM absenteeism WHERE ir_form IS NOT NULL AND ir_form != ''");
-                                while ($row = $stmt->fetch()) {
-                                    $irForm = $row['ir_form'];
-                                    if ($irForm === 'FOR IR' || $irForm === 'NO NEED') {
-                                        $standardOptions[$irForm] = $irForm;
-                                    } elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irForm, $matches)) {
-                                        $dateOnly = "PENDING / " . $matches[1];
-                                        $pendingOptions[$dateOnly] = $dateOnly;
+                                krsort($pendOpts); ksort($noNeedOpts);
+                                $allRendered = array_merge(array_values($stdOpts), array_values($pendOpts), array_values($noNeedOpts));
+                                $allRendered = array_unique($allRendered);
+
+                                if (empty($allRendered)) {
+                                    echo '<p class="text-xs text-gray-500 px-4 py-3">No IR forms found.</p>';
+                                } else {
+                                    foreach ($allRendered as $val) {
+                                        $checked = in_array($val, $selectedIrs) ? 'checked' : '';
+                                        $safeVal = htmlspecialchars($val);
+                                        echo "<label class=\"ir-option flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-white/5 rounded transition-colors text-xs text-gray-300 group\" data-label=\"$safeVal\">"
+                                           . "<input type=\"checkbox\" class=\"ir-checkbox rounded border-gray-600 bg-gray-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0 focus:ring-1\" value=\"$safeVal\" $checked>"
+                                           . "<span class=\"truncate\">$safeVal</span>"
+                                           . "</label>";
                                     }
-                                }
-                                krsort($pendingOptions);
-                                foreach ($standardOptions as $value => $label) {
-                                    $selected = (isset($_GET['ir']) && $_GET['ir'] === $value) ? 'selected' : '';
-                                    echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($label).'</option>';
-                                }
-                                foreach ($pendingOptions as $value => $label) {
-                                    $selected = (isset($_GET['ir']) && $_GET['ir'] === $value) ? 'selected' : '';
-                                    echo '<option value="'.htmlspecialchars($value).'" '.$selected.'>'.htmlspecialchars($label).'</option>';
                                 }
                             }
                             ?>
-                        </select>
-                        <div class="absolute right-3 top-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down text-xs"></i></div>
+                        </div>
+                        <!-- Footer actions -->
+                        <div class="px-3 py-2 border-t border-gray-700/40 flex justify-between items-center">
+                            <span id="irSelCount" class="text-xs text-gray-500">0 selected</span>
+                            <button type="button" onclick="clearIrFilter()" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="lg:col-span-1">
-                    <button type="button" id="clearFiltersBtn" class="w-full h-full px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 text-sm font-medium shadow-inner">
+                <div class="flex justify-end gap-2 shrink-0">
+                    <button type="button" onclick="exportToCsv()" class="px-4 py-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/40 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 text-sm font-medium shadow-inner">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                    <button type="button" id="clearFiltersBtn" class="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 text-sm font-medium shadow-inner">
                         <i class="fas fa-times"></i> Clear
                     </button>
                 </div>
+            </div>
             </div>
         </div>
 
@@ -989,6 +1051,118 @@ function initColumnToggler(tableType) {
     });
 }
 
+// ── IR Dropdown: global functions (called by inline onclick attrs) ──────────
+function getSelectedIrValues() {
+    return Array.from(document.querySelectorAll('#irOptionsList .ir-checkbox:checked'))
+                .map(cb => cb.value);
+}
+
+function updateIrLabel() {
+    const sel     = getSelectedIrValues();
+    const label   = document.getElementById('irFilterLabel');
+    const counter = document.getElementById('irSelCount');
+    if (label)   label.textContent   = sel.length === 0 ? 'All IR Forms' : sel.length + ' selected';
+    if (counter) counter.textContent = sel.length + ' selected';
+}
+
+function positionIrDropdown() {
+    const btn = document.getElementById('irFilterBtn');
+    const dd  = document.getElementById('irFilterDropdown');
+    if (!btn || !dd) return;
+    const rect = btn.getBoundingClientRect();
+    const scrollY = window.scrollY || window.pageYOffset;
+    const scrollX = window.scrollX || window.pageXOffset;
+    // Use absolute (document) coords so backdrop-filter/transform on parents don't break it
+    dd.style.position = 'absolute';
+    dd.style.top      = (rect.bottom + scrollY + 4) + 'px';
+    dd.style.left     = (rect.left + scrollX) + 'px';
+    dd.style.width    = rect.width + 'px';
+    dd.style.zIndex   = '99999';
+    dd.style.minWidth = '240px';
+}
+
+function toggleIrDropdown(e) {
+    e.stopPropagation();
+    const dd      = document.getElementById('irFilterDropdown');
+    const chevron = document.getElementById('irFilterChevron');
+    if (!dd) return;
+    const isHidden = dd.classList.contains('hidden');
+    if (isHidden) {
+        // Teleport to body so no overflow/transform parent clips it
+        if (dd.parentElement !== document.body) {
+            document.body.appendChild(dd);
+        }
+        dd.classList.remove('hidden');
+        positionIrDropdown();
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        const si = document.getElementById('irSearchInput');
+        if (si) si.focus();
+    } else {
+        dd.classList.add('hidden');
+        if (chevron) chevron.style.transform = '';
+    }
+}
+
+
+function filterIrOptions(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll('#irOptionsList .ir-option').forEach(lbl => {
+        lbl.style.display = (lbl.dataset.label || '').toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
+// clearIrFilter is exposed globally; it delegates to handleDropdownFilter
+// which is stored in window._irHandleDropdown once DOMContentLoaded runs.
+function clearIrFilter() {
+    document.querySelectorAll('#irOptionsList .ir-checkbox').forEach(cb => cb.checked = false);
+    updateIrLabel();
+    if (typeof window._irHandleDropdown === 'function') window._irHandleDropdown();
+}
+
+function exportToCsv() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'partials/export_csv.php';
+
+    const appendInput = (name, value) => {
+        if (value === null || value === undefined) return;
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    };
+
+    appendInput('type', urlParams.get('tab') || 'absenteeism');
+    
+    const searchVal = document.getElementById('searchInput') ? document.getElementById('searchInput').value : '';
+    if (searchVal) appendInput('search', searchVal);
+    
+    const dateFrom = document.getElementById('dateFrom') ? document.getElementById('dateFrom').value : '';
+    if (dateFrom) appendInput('date_from', dateFrom);
+    
+    const dateTo = document.getElementById('dateTo') ? document.getElementById('dateTo').value : '';
+    if (dateTo) appendInput('date_to', dateTo);
+    
+    const dept = document.getElementById('departmentFilter') ? document.getElementById('departmentFilter').value : '';
+    if (dept) appendInput('department', dept);
+    
+    const cov = document.getElementById('coverageFilter') ? document.getElementById('coverageFilter').value : '';
+    if (cov) appendInput('coverage', cov);
+    
+    const irs = getSelectedIrValues();
+    if (irs.length > 0) appendInput('ir_filter', irs.join(','));
+    
+    const cardFilter = urlParams.get('filter');
+    if (cardFilter) appendInput('filter', cardFilter);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', function() {
     
     // Copy Absence Report Logic
@@ -1158,11 +1332,76 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateTo = document.getElementById('dateTo');
     const departmentFilter = document.getElementById('departmentFilter');
     const coverageFilter = document.getElementById('coverageFilter');
-    const irFilter = document.getElementById('irFilter');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     
     let searchTimeout;
     let currentFilter = '';
+
+    document.addEventListener('click', function(e) {
+        const wrapper = document.getElementById('irFilterWrapper');
+        const dd      = document.getElementById('irFilterDropdown');
+        if (wrapper && dd && !wrapper.contains(e.target) && !dd.contains(e.target)) {
+            dd.classList.add('hidden');
+            const chevron = document.getElementById('irFilterChevron');
+            if (chevron) chevron.style.transform = '';
+        }
+    });
+
+    // Keep dropdown aligned when page scrolls or window resizes
+    window.addEventListener('scroll', function() {
+        const dd = document.getElementById('irFilterDropdown');
+        if (dd && !dd.classList.contains('hidden')) positionIrDropdown();
+    }, true);
+    window.addEventListener('resize', function() {
+        const dd = document.getElementById('irFilterDropdown');
+        if (dd && !dd.classList.contains('hidden')) positionIrDropdown();
+    });
+
+    // Re-fetch IR form list whenever date changes
+    function fetchIRForms() {
+        const tab  = new URLSearchParams(window.location.search).get('tab') || 'absenteeism';
+        if (tab === 'vto') return;
+        const from = dateFrom ? dateFrom.value : '';
+        const to   = dateTo   ? dateTo.value   : '';
+        const url  = `partials/get_ir_forms.php?type=${tab}&date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`;
+        const currentlySelected = getSelectedIrValues();
+
+        fetch(url)
+        .then(r => r.json())
+        .then(items => {
+            const list = document.getElementById('irOptionsList');
+            if (!list) return;
+            if (items.length === 0) {
+                list.innerHTML = '<p class="text-xs text-gray-500 px-4 py-3">No IR forms found for selected dates.</p>';
+                updateIrLabel();
+                return;
+            }
+            list.innerHTML = items.map(val => {
+                const safe    = val.replace(/"/g, '&quot;');
+                const checked = currentlySelected.includes(val) ? 'checked' : '';
+                return `<label class="ir-option flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-white/5 rounded transition-colors text-xs text-gray-300" data-label="${safe}">`
+                     + `<input type="checkbox" class="ir-checkbox rounded border-gray-600 bg-gray-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0 focus:ring-1" value="${safe}" ${checked}>`
+                     + `<span class="truncate">${safe}</span></label>`;
+            }).join('');
+            // Re-bind change listeners for newly created checkboxes
+            bindIrCheckboxListeners();
+            updateIrLabel();
+        })
+        .catch(() => {});
+    }
+
+    function bindIrCheckboxListeners() {
+        document.querySelectorAll('#irOptionsList .ir-checkbox').forEach(cb => {
+            cb.removeEventListener('change', onIrCheckboxChange);
+            cb.addEventListener('change', onIrCheckboxChange);
+        });
+    }
+
+    function onIrCheckboxChange() {
+        updateIrLabel();
+        handleDropdownFilter();
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // NEW FUNCTION: Highlights PENDING text, adds a red pulsing dot, and applies an "unread" background to the row
     function addPendingDots() {
@@ -1216,7 +1455,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             if (departmentFilter) formData.append('department', departmentFilter.value);
             if (coverageFilter) formData.append('coverage_1', coverageFilter.value);
-            if (irFilter) formData.append('ir_filter', irFilter.value);
+            const irVals = getSelectedIrValues().join(',');
+            if (irVals) formData.append('ir_filter', irVals);
         }
 
         formData.append('date_from', dateFrom ? dateFrom.value : '');
@@ -1252,11 +1492,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
     function handleCardFilter(filterValue) {
         const urlParams = new URLSearchParams(window.location.search);
-        urlParams.delete('dept'); urlParams.delete('cov'); urlParams.delete('filter');
+        urlParams.delete('dept'); urlParams.delete('cov'); urlParams.delete('filter'); urlParams.delete('ir');
         
         if(departmentFilter) departmentFilter.value = '';
         if(coverageFilter) coverageFilter.value = '';
-        if(irFilter) irFilter.value = '';
+        // Clear IR checkboxes
+        document.querySelectorAll('#irOptionsList .ir-checkbox').forEach(cb => cb.checked = false);
+        updateIrLabel();
         
         currentFilter = filterValue;
         urlParams.set('filter', filterValue);
@@ -1275,7 +1517,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (departmentFilter && departmentFilter.value) urlParams.set('dept', departmentFilter.value); else urlParams.delete('dept');
         if (coverageFilter && coverageFilter.value) urlParams.set('cov', coverageFilter.value); else urlParams.delete('cov');
-        if (irFilter && irFilter.value) urlParams.set('ir', irFilter.value); else urlParams.delete('ir');
+        const irVals = getSelectedIrValues().join(',');
+        if (irVals) urlParams.set('ir', irVals); else urlParams.delete('ir');
         if (dateFrom && dateFrom.value) urlParams.set('from', dateFrom.value); else urlParams.delete('from');
         if (dateTo && dateTo.value) urlParams.set('to', dateTo.value); else urlParams.delete('to');
         
@@ -1283,6 +1526,8 @@ document.addEventListener('DOMContentLoaded', function() {
         history.pushState(null, '', '?' + urlParams.toString());
         loadFilteredData();
     }
+    // Expose to global clearIrFilter bridge
+    window._irHandleDropdown = handleDropdownFilter;
 
     if (clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', function() {
@@ -1295,7 +1540,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.filter-button').forEach(btn => { btn.addEventListener('click', function(e) { handleCardFilter(this.value); }); });
     if(departmentFilter) departmentFilter.addEventListener('change', handleDropdownFilter);
     if(coverageFilter) coverageFilter.addEventListener('change', handleDropdownFilter);
-    if(irFilter) irFilter.addEventListener('change', handleDropdownFilter);
+    // Bind initial IR checkboxes
+    bindIrCheckboxListeners();
+    updateIrLabel();
     
     if(searchInput) {
         searchInput.addEventListener('input', () => {
@@ -1306,7 +1553,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 else {
                     if (departmentFilter && departmentFilter.value) urlParams.set('dept', departmentFilter.value);
                     if (coverageFilter && coverageFilter.value) urlParams.set('cov', coverageFilter.value);
-                    if (irFilter && irFilter.value) urlParams.set('ir', irFilter.value);
+                    const irVals = getSelectedIrValues().join(',');
+                    if (irVals) urlParams.set('ir', irVals); else urlParams.delete('ir');
                 }
                 if (searchInput.value) urlParams.set('search', searchInput.value); else urlParams.delete('search');
                 history.pushState(null, '', '?' + urlParams.toString());
@@ -1315,8 +1563,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    if(dateFrom) dateFrom.addEventListener('change', handleDropdownFilter);
-    if(dateTo) dateTo.addEventListener('change', handleDropdownFilter);
+    function fetchDepartments() {
+        const tab  = new URLSearchParams(window.location.search).get('tab') || 'absenteeism';
+        if (tab === 'vto') return;
+        const from = dateFrom ? dateFrom.value : '';
+        const to   = dateTo   ? dateTo.value   : '';
+        const url  = `partials/get_departments.php?type=${tab}&date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`;
+        const currentDept = departmentFilter ? departmentFilter.value : '';
+        fetch(url)
+        .then(r => r.json())
+        .then(items => {
+            if (!departmentFilter) return;
+            departmentFilter.innerHTML = '<option value="">All Departments</option>';
+            items.forEach(dept => {
+                const opt = document.createElement('option');
+                opt.value = dept;
+                opt.textContent = dept;
+                if (dept === currentDept) opt.selected = true;
+                departmentFilter.appendChild(opt);
+            });
+        })
+        .catch(() => {});
+    }
+
+    if(dateFrom) dateFrom.addEventListener('change', function() { fetchIRForms(); fetchDepartments(); handleDropdownFilter(); });
+    if(dateTo)   dateTo.addEventListener('change',   function() { fetchIRForms(); fetchDepartments(); handleDropdownFilter(); });
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('filter')) {

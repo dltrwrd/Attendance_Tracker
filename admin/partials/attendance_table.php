@@ -136,41 +136,68 @@ if ($type === 'absenteeism' && !empty($coverage)) {
 
 // Add this to the where clauses section
 if (!empty($irFilter)) {
-    if ($type === 'tardiness') {
-        if ($irFilter === 'FOR IR') {
-            $whereClauses[] = "ir_form = 'FOR IR'";
-        } 
-        elseif ($irFilter === 'FOR ACCUMULATION') {
-            $whereClauses[] = "ir_form = 'FOR ACCUMULATION'";
-        }
-        elseif ($irFilter === 'PENDING') {
-            $whereClauses[] = "ir_form LIKE 'PENDING%'";
-        }
-        // Handle specific pending dates
-        elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irFilter, $matches)) {
-            $datePart = $matches[1];
-            $whereClauses[] = "ir_form LIKE :ir_filter";
-            $params[':ir_filter'] = "PENDING / $datePart%";
-        }
-    } else {
-        // Absenteeism filtering
-        if ($irFilter === 'FOR IR') {
-            $whereClauses[] = "ir_form = 'FOR IR'";
-        }
-        elseif ($irFilter === 'NO NEED') {
-            $whereClauses[] = "ir_form = 'NO NEED'";
-        }
-        // Handle specific pending dates for absenteeism
-        elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $irFilter, $matches)) {
-            $datePart = $matches[1];
-            $whereClauses[] = "ir_form LIKE :ir_filter";
-            $params[':ir_filter'] = "PENDING / $datePart%";
+    $irFiltersArray = explode(',', $irFilter);
+    $irOrClauses = [];
+    
+    foreach ($irFiltersArray as $idx => $singleIrFilter) {
+        $singleIrFilter = trim($singleIrFilter);
+        if (empty($singleIrFilter)) continue;
+
+        if ($type === 'tardiness') {
+            if ($singleIrFilter === 'FOR IR') {
+                $irOrClauses[] = "ir_form = 'FOR IR'";
+            } 
+            elseif ($singleIrFilter === 'FOR ACCUMULATION') {
+                $irOrClauses[] = "ir_form = 'FOR ACCUMULATION'";
+            }
+            elseif ($singleIrFilter === 'PENDING') {
+                $irOrClauses[] = "ir_form LIKE 'PENDING%'";
+            }
+            elseif (strpos(strtoupper($singleIrFilter), 'NO NEED') === 0) {
+                $irOrClauses[] = "ir_form = :ir_filter_no_need_$idx";
+                $params[":ir_filter_no_need_$idx"] = $singleIrFilter;
+            }
+            // Handle specific pending dates
+            elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $singleIrFilter, $matches)) {
+                $datePart = $matches[1];
+                $irOrClauses[] = "ir_form LIKE :ir_filter_$idx";
+                $params[":ir_filter_$idx"] = "PENDING / $datePart%";
+            }
+        } else {
+            // Absenteeism filtering
+            if ($singleIrFilter === 'FOR IR') {
+                $irOrClauses[] = "ir_form = 'FOR IR'";
+            }
+            elseif (strpos(strtoupper($singleIrFilter), 'NO NEED') === 0) {
+                $irOrClauses[] = "ir_form = :ir_filter_no_need_$idx";
+                $params[":ir_filter_no_need_$idx"] = $singleIrFilter;
+            }
+            // Handle specific pending dates for absenteeism
+            elseif (preg_match('/PENDING \/ ([A-Z]{3,4} [0-9]{1,2})/', $singleIrFilter, $matches)) {
+                $datePart = $matches[1];
+                $irOrClauses[] = "ir_form LIKE :ir_filter_$idx";
+                $params[":ir_filter_$idx"] = "PENDING / $datePart%";
+            }
         }
     }
     
+    if (!empty($irOrClauses)) {
+        $whereClauses[] = "(" . implode(' OR ', $irOrClauses) . ")";
+    }
+    
     // Add this condition to exclude "YES" records when filtering for specific IR statuses in tardiness
-    if ($type === 'tardiness' && in_array($irFilter, ['FOR IR', 'FOR ACCUMULATION', 'PENDING'])) {
-        $whereClauses[] = "ir_form != 'YES'";
+    if ($type === 'tardiness') {
+        $excludeYes = false;
+        foreach ($irFiltersArray as $singleIrFilter) {
+            $singleIrFilter = trim($singleIrFilter);
+            if (in_array($singleIrFilter, ['FOR IR', 'FOR ACCUMULATION', 'PENDING']) || strpos(strtoupper($singleIrFilter), 'NO NEED') === 0) {
+                $excludeYes = true;
+                break;
+            }
+        }
+        if ($excludeYes) {
+            $whereClauses[] = "ir_form != 'YES'";
+        }
     }
 }
 
@@ -211,6 +238,65 @@ try {
                     )
                 ELSE STR_TO_DATE('12:00 AM', '%l:%i %p')
             END ASC";
+    }
+    
+    if (isset($_POST['export_csv'])) {
+        $exportQuery = "SELECT * FROM $table $searchQuery $orderBy";
+        $exportStmt = $pdo->prepare($exportQuery);
+        foreach ($params as $key => $value) {
+            $exportStmt->bindValue($key, $value);
+        }
+        $exportStmt->execute();
+        $records = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Build a friendly title based on the date range
+        $tabLabel = ucfirst($type); // e.g. "Absenteeism", "Tardiness"
+        if (!empty($dateFrom) && !empty($dateTo)) {
+            $fromLabel = date('M j, Y', strtotime($dateFrom));
+            $toLabel   = date('M j, Y', strtotime($dateTo));
+            // Title month/year based on from date
+            $titleMonth = date('F Y', strtotime($dateFrom));
+        } elseif (!empty($dateFrom)) {
+            $fromLabel  = date('M j, Y', strtotime($dateFrom));
+            $toLabel    = '-';
+            $titleMonth = date('F Y', strtotime($dateFrom));
+        } elseif (!empty($dateTo)) {
+            $fromLabel  = '-';
+            $toLabel    = date('M j, Y', strtotime($dateTo));
+            $titleMonth = date('F Y', strtotime($dateTo));
+        } else {
+            $fromLabel  = 'All';
+            $toLabel    = 'All';
+            $titleMonth = date('F Y');
+        }
+
+        $deptLabel    = !empty($department) ? $department : 'All';
+        $totalEmp     = count($records);
+        $exportDate   = date('m/d/Y G:i');
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . strtolower($tabLabel) . '_export_' . date('Y-m-d') . '.csv');
+        $output = fopen('php://output', 'w');
+        
+        // ---- Header block (matches the screenshot format) ----
+        fputcsv($output, ["$tabLabel Export - $titleMonth"]);
+        fputcsv($output, ['Period:', "$fromLabel to $toLabel"]);
+        fputcsv($output, ['Department:', $deptLabel]);
+        fputcsv($output, ['Total Emp', $totalEmp]);
+        fputcsv($output, ['Export Date', $exportDate]);
+        fputcsv($output, []); // blank separator row
+        // ------------------------------------------------------
+
+        if (count($records) > 0) {
+            fputcsv($output, array_keys($records[0]));
+            foreach ($records as $row) {
+                fputcsv($output, $row);
+            }
+        } else {
+            fputcsv($output, ['No records found matching filters.']);
+        }
+        fclose($output);
+        exit;
     }
     
     $query = "SELECT * FROM $table $searchQuery $orderBy LIMIT :limit OFFSET :offset";
@@ -297,6 +383,7 @@ try {
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Type</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20 transition-all">Minutes</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24 transition-all">Shift</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64 transition-all">Coverage Details</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Incident Report</th>
                     <?php else: ?>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Shift Date</th>
@@ -316,7 +403,7 @@ try {
             <tbody class="bg-gray-800 divide-y divide-gray-700">
                 <?php if (empty($records)): ?>
                     <tr>
-                        <td colspan="<?= $type === 'absenteeism' ? 16 : ($type === 'tardiness' ? 13 : 15) ?>" class="px-6 py-8 text-center text-gray-400">
+                        <td colspan="<?= $type === 'absenteeism' ? 16 : ($type === 'tardiness' ? 14 : 15) ?>" class="px-6 py-8 text-center text-gray-400">
                             <i class="fas fa-users-slash text-3xl mb-3 opacity-50"></i>
                             <p class="text-lg">No records found</p>
                             <p class="text-sm mt-1" style="text-transform: uppercase;"><?= $type ?></p>
@@ -568,6 +655,40 @@ try {
                                     <div class="text-sm text-gray-300"><?= $record['shift'] ?></div>
                                 </td>
                                 <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+                                    <div class="text-sm text-gray-300" 
+                                        title="<?php
+                                        if (!empty($record['coverage_1'])) {
+                                            $coverageText = htmlspecialchars($record['coverage_1']);
+                                            $coverageType = htmlspecialchars($record['coverage_type_1'] ?? '');
+                                            $coverageDetail = htmlspecialchars($record['coverage_details_1'] ?? '');
+                                            
+                                            if ($coverageType === 'PENDING') {
+                                                $detail = $coverageText;
+                                            } else {
+                                                $detail = $coverageText;
+                                                if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
+                                                    $detail .= " ($coverageType";
+                                                    if (!empty($coverageDetail) && $coverageDetail !== '-') {
+                                                        $detail .= " - $coverageDetail";
+                                                    }
+                                                    $detail .= ")";
+                                                }
+                                            }
+                                            echo $detail;
+                                        } else {
+                                            echo '-';
+                                        }
+                                        ?>">
+                                        <?php
+                                        if (!empty($record['coverage_1'])) {
+                                            echo $detail;
+                                        } else {
+                                            echo '-';
+                                        }
+                                        ?>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300 flex items-center" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['ir_form'] ?? '') ?>">
                                         <?php if (strpos(strtoupper($record['ir_form'] ?? ''), 'FOR IR') !== false): ?>
                                             <div class="w-2 h-2 rounded-full bg-red-500 mr-2 flex-shrink-0 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]" title="Action Required: For IR"></div>
@@ -631,7 +752,7 @@ try {
 
 <!-- Pagination -->
 <?php if ($totalPages > 1): ?>
-<div class="mt-6 flex items-center justify-between">
+<div class="p-4 flex items-center justify-between">
     <div class="text-sm text-gray-400">
         Showing <?= ($offset + 1) ?> to <?= min($offset + $perPage, $totalRecords) ?> of <?= $totalRecords ?> records
     </div>

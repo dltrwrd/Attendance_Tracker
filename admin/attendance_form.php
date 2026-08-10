@@ -180,6 +180,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("A tardiness record already exists for this ". $fullName ." on the selected date " . date('F j, Y', strtotime($dateField)) .".");
             }
             
+            $coverage_1 = '';
+            $coverage_type_1 = '-';
+            $coverage_details_1 = '';
+            
+            if ($types === 'UNDERTIME' && isset($_POST['coverage']) && is_array($_POST['coverage']) && isset($_POST['coverage'][0])) {
+                $coverage_1 = strtoupper(trim(sanitizeInput($_POST['coverage'][0])));
+                $coverage_type_1 = isset($_POST['coverage_type'][0]) ? strtoupper(trim(sanitizeInput($_POST['coverage_type'][0]))) : '-';
+                if (isset($_POST['detailed_coverage_type'][0])) {
+                    $coverage_details_1 = strtoupper(trim(sanitizeInput($_POST['detailed_coverage_type'][0])));
+                }
+            }
+
             $data = [
                 'month' => $currentMonth,
                 'employee_id' => $employeeId,
@@ -194,6 +206,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'shift' => strtoupper(sanitizeInput($_POST['shift'])),
                 'time_in' => strtoupper(sanitizeInput($_POST['time_in'])),
                 'ir_form' => strtoupper(sanitizeInput($_POST['ir_form'])),
+                'coverage_1' => $coverage_1,
+                'coverage_type_1' => $coverage_type_1,
+                'coverage_details_1' => $coverage_details_1,
                 'timestamp' => $currentTime,
                 'sub_name' => $sub_name
             ];
@@ -214,6 +229,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     shift = :shift,
                     time_in = :time_in,
                     ir_form = :ir_form,
+                    coverage_1 = :coverage_1,
+                    coverage_type_1 = :coverage_type_1,
+                    coverage_details_1 = :coverage_details_1,
                     timestamp = :timestamp,
                     sub_name = :sub_name
                     WHERE id = :id");
@@ -227,10 +245,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Insert new record
                 $stmt = $pdo->prepare("INSERT INTO tardiness 
                     (month, employee_id, full_name, department, supervisor, operation_manager, email, 
-                    date_of_incident, types, minutes_late, shift, time_in, ir_form, timestamp, sub_name)
+                    date_of_incident, types, minutes_late, shift, time_in, ir_form, coverage_1, coverage_type_1, coverage_details_1, timestamp, sub_name)
                     VALUES 
                     (:month, :employee_id, :full_name, :department, :supervisor, :operation_manager, :email, 
-                    :date_of_incident, :types, :minutes_late, :shift, :time_in, :ir_form, :timestamp, :sub_name)");
+                    :date_of_incident, :types, :minutes_late, :shift, :time_in, :ir_form, :coverage_1, :coverage_type_1, :coverage_details_1, :timestamp, :sub_name)");
                 
                 $stmt->execute($data);
                 $recordId = $pdo->lastInsertId();
@@ -617,8 +635,8 @@ renderSidebar('attendance');
                                     <div class="relative">
                                         <select id="types" name="types"
                                                 class="glass-input w-full pl-4 pr-10 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 appearance-none" required>
-                                            <option value="LATE" <?= $record && $record['types'] === 'LATE' ? 'selected' : '' ?>>LATE</option>
-                                            <option value="UNDERTIME" <?= $record && $record['types'] === 'UNDERTIME' ? 'selected' : '' ?>>UNDERTIME</option>
+                                            <option value="LATE" <?= $record && strtoupper($record['types']) === 'LATE' ? 'selected' : '' ?>>LATE</option>
+                                            <option value="UNDERTIME" <?= $record && strtoupper($record['types']) === 'UNDERTIME' ? 'selected' : '' ?>>UNDERTIME</option>
                                         </select>
                                         <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
                                             <i class="fas fa-chevron-down"></i>
@@ -651,6 +669,82 @@ renderSidebar('attendance');
                                     <input type="text" id="ir_form" name="ir_form" style="text-transform: uppercase;"
                                         class="glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100" 
                                         value="<?= $record ? htmlspecialchars($record['ir_form']) : '' ?>">
+                                </div>
+
+                                <div class="md:col-span-2" id="tardinessCoverageSection" style="display: <?= ($record && strtoupper($record['types']) === 'UNDERTIME') ? 'block' : 'none' ?>;">
+                                    <h3 class="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center mb-4 mt-2 border-t border-gray-700/50 pt-4">
+                                        <i class="fas fa-users-cog mr-2 text-primary-500"></i> Shift Coverage (Undertime)
+                                    </h3>
+                                    
+                                    <?php
+                                        $coverage = $record['coverage_1'] ?? '';
+                                        $coverageType = $record['coverage_type_1'] ?? '-';
+                                        $coverageDetails = $record['coverage_details_1'] ?? '';
+                                        
+                                        $isRDOT = ($coverageType === 'RDOT');
+                                        $isDSOT = ($coverageType === 'DSOT');
+                                    ?>
+                                    <div class="coverage-field p-5 border border-gray-600/30 rounded-2xl bg-gray-800/30 shadow-inner">
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage 1</label>
+                                                <textarea name="coverage[]" style="text-transform: uppercase;" rows="2"
+                                                        class="tardiness-coverage-input glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
+                                                        <?= ($record && strtoupper($record['types']) === 'UNDERTIME') ? 'required' : '' ?>><?= htmlspecialchars($coverage) ?></textarea>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Type 1</label>
+                                                <div class="relative">
+                                                    <select name="coverage_type[]" class="coverage-type-select glass-input w-full pl-4 pr-10 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 appearance-none" <?= ($record && strtoupper($record['types']) === 'UNDERTIME') ? 'required' : '' ?> onchange="handleCoverageTypeChange(this)">
+                                                        <option value="-" <?= $coverageType === '-' ? 'selected' : '' ?>>-</option>
+                                                        <option value="NO NEED" <?= $coverageType === 'NO NEED' ? 'selected' : '' ?>>NO NEED</option>
+                                                        <option value="TRAINEE" <?= $coverageType === 'TRAINEE' ? 'selected' : '' ?>>TRAINEE</option>
+                                                        <option value="BACK UP" <?= $coverageType === 'BACK UP' ? 'selected' : '' ?>>BACK UP</option>
+                                                        <option value="PENDING" <?= $coverageType === 'PENDING' ? 'selected' : '' ?>>PENDING</option>
+                                                        <option value="DSOT" <?= $coverageType === 'DSOT' ? 'selected' : '' ?>>DSOT</option>
+                                                        <option value="RDOT" <?= $coverageType === 'RDOT' ? 'selected' : '' ?>>RDOT</option>
+                                                        <option value="AGENT MODE" <?= $coverageType === 'AGENT MODE' ? 'selected' : '' ?>>AGENT MODE</option>
+                                                        <option value="PVL" <?= $coverageType === 'PVL' ? 'selected' : '' ?>>PVL</option>
+                                                    </select>
+                                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
+                                                        <i class="fas fa-chevron-down"></i>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="detailed-coverage mt-3 <?= ($isRDOT || $isDSOT) ? '' : 'hidden' ?> relative">
+                                                    <select name="detailed_coverage_type[]" 
+                                                            class="detailed-select glass-input w-full pl-4 pr-10 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 appearance-none border-blue-500/50" 
+                                                            <?= ($isRDOT || $isDSOT) ?>
+                                                            data-current-value="<?= htmlspecialchars($coverageDetails) ?>">
+                                                        <option value="">Select detailed type</option>
+                                                        <?php if ($isRDOT): ?>
+                                                            <option value="12HRS RDOT" <?= $coverageDetails === '12HRS RDOT' ? 'selected' : '' ?>>12hrs RDOT</option>
+                                                            <option value="8HRS RDOT" <?= $coverageDetails === '8HRS RDOT' ? 'selected' : '' ?>>8hrs RDOT</option>
+                                                            <option value="6HRS RDOT" <?= $coverageDetails === '6HRS RDOT' ? 'selected' : '' ?>>6hrs RDOT</option>
+                                                            <option value="4HRS RDOT" <?= $coverageDetails === '4HRS RDOT' ? 'selected' : '' ?>>4hrs RDOT</option>
+                                                        <?php elseif ($isDSOT): ?>
+                                                            <option value="12HRS OT DS" <?= $coverageDetails === '12HRS OT DS' ? 'selected' : '' ?>>12hrs OT DS</option>
+                                                            <option value="8HRS OT DS" <?= $coverageDetails === '8HRS OT DS' ? 'selected' : '' ?>>8hrs OT DS</option>
+                                                            <option value="6HRS OT DS" <?= $coverageDetails === '6HRS OT DS' ? 'selected' : '' ?>>6hrs OT DS</option>
+                                                            <option value="4HRS OT DS" <?= $coverageDetails === '4HRS OT DS' ? 'selected' : '' ?>>4hrs OT DS</option>
+                                                        <?php else: ?>
+                                                            <option value="12HRS RDOT">12hrs RDOT</option>
+                                                            <option value="8HRS RDOT">8hrs RDOT</option>
+                                                            <option value="6HRS RDOT">6hrs RDOT</option>
+                                                            <option value="4HRS RDOT">4hrs RDOT</option>
+                                                            <option value="12HRS OT DS">12hrs OT DS</option>
+                                                            <option value="8HRS OT DS">8hrs OT DS</option>
+                                                            <option value="6HRS OT DS">6hrs OT DS</option>
+                                                            <option value="4HRS OT DS">4hrs OT DS</option>
+                                                        <?php endif; ?>
+                                                    </select>
+                                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
+                                                        <i class="fas fa-chevron-down text-xs"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -1086,6 +1180,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update button visibility on page load
         updateAddButtonVisibility();
+    }
+    
+    // Add listener for tardiness types select to toggle coverage
+    const typesSelect = document.getElementById('types');
+    if (typesSelect) {
+        typesSelect.addEventListener('change', function() {
+            const coverageSection = document.getElementById('tardinessCoverageSection');
+            if (coverageSection) {
+                const coverageInputs = coverageSection.querySelectorAll('.tardiness-coverage-input, .coverage-type-select');
+                if (this.value === 'UNDERTIME') {
+                    coverageSection.style.display = 'block';
+                    coverageInputs.forEach(input => input.setAttribute('required', 'required'));
+                } else {
+                    coverageSection.style.display = 'none';
+                    coverageInputs.forEach(input => input.removeAttribute('required'));
+                }
+            }
+        });
+        
+        // Also trigger it on load to set correct initial state
+        const coverageSection = document.getElementById('tardinessCoverageSection');
+        if (coverageSection) {
+            // Check if any coverage fields need their detailed options populated
+            const tardinessCoverageTypeSelects = coverageSection.querySelectorAll('.coverage-type-select');
+            tardinessCoverageTypeSelects.forEach(select => handleCoverageTypeChange(select));
+        }
     }
 });
 
