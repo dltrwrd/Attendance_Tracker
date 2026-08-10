@@ -230,6 +230,82 @@ if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'bulk_fire') {
 }
 // ==========================================
 
+// ==========================================
+// AJAX ACTION: Bulk Queue Email (tardiness/absenteeism infraction notices)
+// ==========================================
+if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'bulk_queue_email') {
+    header('Content-Type: application/json');
+    require_once '../includes/infraction_email.php';
+    require_once '../includes/ensure_email_queue_table.php';
+    try {
+        $ids = json_decode($_POST['record_ids'], true);
+        $type = $_POST['type'] ?? '';
+
+        if (!in_array($type, ['tardiness', 'absenteeism'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Bulk email is only available for tardiness and absenteeism records']);
+            exit;
+        }
+        if (!is_array($ids) || count($ids) === 0) {
+            echo json_encode(['success' => false, 'message' => 'No records provided']);
+            exit;
+        }
+
+        ensureEmailQueueTable($pdo);
+
+        $userStmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+        $userStmt->execute([$_SESSION['user_id']]);
+        $sender = $userStmt->fetch() ?: [];
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        // Only records that haven't been emailed yet, same guard as the single Send Email button
+        $stmt = $pdo->prepare("SELECT * FROM $type WHERE id IN ($placeholders) AND email_sent = 0");
+        $stmt->execute($ids);
+        $records = $stmt->fetchAll();
+
+        // Records that already have an unfinished queue entry (e.g. admin clicked twice
+        // before the first batch finished) — skip them instead of double-queuing.
+        $alreadyQueuedStmt = $pdo->prepare("SELECT source_id FROM email_queue WHERE source_type = ? AND source_id IN ($placeholders) AND status IN ('pending', 'sending')");
+        $alreadyQueuedStmt->execute(array_merge([$type], $ids));
+        $alreadyQueued = array_flip($alreadyQueuedStmt->fetchAll(PDO::FETCH_COLUMN));
+
+        $insert = $pdo->prepare("INSERT INTO email_queue (to_emails, cc_emails, subject, body, source_type, source_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $queued = 0;
+        $skipped = count($ids) - count($records); // already email_sent = 1
+
+        foreach ($records as $record) {
+            if (isset($alreadyQueued[$record['id']])) {
+                $skipped++;
+                continue;
+            }
+            $built = buildInfractionEmail($pdo, $type, $record, $sender);
+            if (!$built) {
+                $skipped++;
+                continue;
+            }
+            $insert->execute([
+                implode(',', $built['to']),
+                implode(',', $built['cc']),
+                $built['subject'],
+                $built['body'],
+                $type,
+                $record['id'],
+                $_SESSION['user_id'],
+            ]);
+            $queued++;
+        }
+
+        if ($queued > 0) {
+            logActivity("Bulk-queued {$queued} infraction email(s) for {$type}");
+        }
+
+        echo json_encode(['success' => true, 'queued' => $queued, 'skipped' => $skipped]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+// ==========================================
+
 // Get statistics
 $stats = [
     'pending_emails' => 0, 'pending_emails_today' => 0,
@@ -543,7 +619,11 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                     <button id="reTrackEmailBtn" class="hidden glass-panel hover:bg-blue-600/80 text-blue-300 hover:text-white px-4 py-2.5 rounded-xl border-blue-500/30 transition-all shadow-lg text-sm font-medium flex items-center">
                         <i class="fas fa-redo-alt mr-2"></i> Re-track Email
                     </button>
-                    
+
+                    <button id="bulkEmailBtn" class="hidden glass-panel hover:bg-indigo-600/80 text-indigo-300 hover:text-white px-4 py-2.5 rounded-xl border-indigo-500/30 transition-all shadow-lg text-sm font-medium flex items-center">
+                        <i class="fas fa-envelope-open-text mr-2"></i> Bulk Email
+                    </button>
+
                     <button id="bulkFireBtn" class="hidden glass-panel hover:bg-red-600/80 text-red-300 hover:text-white px-4 py-2.5 rounded-xl border-red-500/30 transition-all shadow-lg text-sm font-medium flex items-center">
                         <i class="fas fa-fire mr-2"></i> Bulk Fire
                     </button>
@@ -1282,6 +1362,68 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    const bulkEmailBtn = document.getElementById('bulkEmailBtn');
+    if (bulkEmailBtn) {
+        bulkEmailBtn.addEventListener('click', function() {
+            const selectedIds = Array.from(document.querySelectorAll('.record-checkbox')).filter(cb => cb.checked).map(cb => cb.getAttribute('data-id'));
+            if (selectedIds.length === 0) return alert('Please select at least one record.');
+
+            showConfirmationModal(
+                'Bulk Email',
+                `Queue infraction emails for ${selectedIds.length} record(s)? Sending happens in the background so the page stays responsive.`,
+                function() {
+                    const formData = new FormData();
+                    formData.append('ajax_action', 'bulk_queue_email');
+                    formData.append('record_ids', JSON.stringify(selectedIds));
+                    formData.append('type', '<?= $currentTab ?>');
+
+                    fetch('attendance.php', { method: 'POST', body: formData })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) return alert('Error: ' + data.message);
+
+                        const originalHTML = bulkEmailBtn.innerHTML;
+                        bulkEmailBtn.disabled = true;
+
+                        // Drive the worker to completion here (batches of 20) instead of firing
+                        // once — a >20-record selection would otherwise leave the rest sitting
+                        // pending until Task Scheduler's next run or another button click.
+                        function processBatch() {
+                            fetch('../includes/send_email_queue.php', { credentials: 'same-origin' })
+                                .then(r => r.json())
+                                .then(res => {
+                                    if (res.error) {
+                                        alert('Error while sending: ' + res.error);
+                                        bulkEmailBtn.innerHTML = originalHTML;
+                                        bulkEmailBtn.disabled = false;
+                                        return;
+                                    }
+                                    const counts = res.counts || {};
+                                    const stillPending = (counts.pending || 0) + (counts.sending || 0);
+                                    if (stillPending > 0) {
+                                        bulkEmailBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Sending... ${stillPending} left`;
+                                        setTimeout(processBatch, 500);
+                                    } else {
+                                        bulkEmailBtn.innerHTML = originalHTML;
+                                        bulkEmailBtn.disabled = false;
+                                        alert(`Done. Sent ${counts.sent || 0}, failed ${counts.failed || 0}.`);
+                                        location.reload();
+                                    }
+                                })
+                                .catch(() => {
+                                    bulkEmailBtn.innerHTML = originalHTML;
+                                    bulkEmailBtn.disabled = false;
+                                    alert('Network error while sending emails.');
+                                });
+                        }
+                        processBatch();
+                    })
+                    .catch(error => alert('An error occurred while queuing emails.'));
+                }
+            );
+        });
+    }
+
     const bulkFireBtn = document.getElementById('bulkFireBtn');
     if (bulkFireBtn) {
         bulkFireBtn.addEventListener('click', function() {
@@ -1318,11 +1460,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if ('<?= $currentTab ?>' !== 'vto') {
                 if (noNeedEmailBtn) noNeedEmailBtn.classList.remove('hidden');
                 if (reTrackEmailBtn) reTrackEmailBtn.classList.remove('hidden');
+                if (bulkEmailBtn) bulkEmailBtn.classList.remove('hidden');
             }
             if (bulkFireBtn) bulkFireBtn.classList.remove('hidden');
         } else {
             if (noNeedEmailBtn) noNeedEmailBtn.classList.add('hidden');
             if (reTrackEmailBtn) reTrackEmailBtn.classList.add('hidden');
+            if (bulkEmailBtn) bulkEmailBtn.classList.add('hidden');
             if (bulkFireBtn) bulkFireBtn.classList.add('hidden');
         }
     }
@@ -1718,11 +1862,15 @@ function fireEmployee(recordId, recordType) {
 
 function confirmSendEmail(event, url) {
     event.preventDefault();
+    // Carry the page's current (possibly pushState-only) URL along, so send_email.php can
+    // redirect back to exactly what's on screen instead of resetting filters to a bare tab.
+    const separator = url.includes('?') ? '&' : '?';
+    const urlWithReturn = url + separator + 'return_url=' + encodeURIComponent(window.location.href);
     showConfirmationModal(
         'Send Email Notification',
         'Are you sure you want to send the email notification for this record?',
         function() {
-            window.location.href = url;
+            window.location.href = urlWithReturn;
         },
         'fa-envelope',
         'blue'
