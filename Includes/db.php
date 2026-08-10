@@ -3,7 +3,7 @@ require_once 'config.php';
 
 // Default fallback credentials (local)
 $host = 'localhost';
-$dbname = 'cxi_slt_tracker';
+$dbname = 'auth_system';
 $username = 'root';
 $password = '';
 

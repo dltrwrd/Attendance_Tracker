@@ -13,12 +13,18 @@ $userId = $_SESSION['user_id'];
 $today = date('Y-m-d');
 $validBets = [1, 2, 5, 10, 15, 20, 30, 40, 50];
 $symbols = [
-    'J' => ['char' => '🃏', 'payout' => 1],
-    'Q' => ['char' => '👸', 'payout' => 2],
-    'K' => ['char' => '🤴', 'payout' => 3],
-    'A' => ['char' => '🅰️', 'payout' => 4],
-    'WILD' => ['char' => '💎', 'payout' => 5] // Wildcard
+    'JOKER'     => ['char' => 'assets/joker-removebg-preview.png',       'payout' => 1],
+    'Q_SPADE'   => ['char' => 'assets/queen-removebg-preview.png',       'payout' => 2],
+    'Q_HEART'   => ['char' => 'assets/queen_heart-removebg-preview.png', 'payout' => 3],
+    'K_SPADE'   => ['char' => 'assets/king_spade-removebg-preview.png',  'payout' => 4],
+    'K_HEART'   => ['char' => 'assets/king_heart-removebg-preview.png',  'payout' => 5],
+    'A_CLOVE'   => ['char' => 'assets/ace_clove-removebg-preview.png',   'payout' => 6],
+    'A_DIAMOND' => ['char' => 'assets/ace_diamond-removebg-preview.png', 'payout' => 7],
+    'A_HEART'   => ['char' => 'assets/ace_heart-removebg-preview.png',   'payout' => 8],
+    'A_SPADE'   => ['char' => 'assets/ace_spade-removebg-preview.png',   'payout' => 9],
+    'WILD'      => ['char' => 'assets/coins-removebg-preview.png',       'payout' => 10]
 ];
+
 
 try {
     // 1. Fetch current points and handle daily reset
@@ -84,145 +90,153 @@ try {
         // Deduct cost
         $points -= $betSize;
 
-        // Determine win or loss strictly (80% loss / 20% win)
-        $isWinSpin = (rand(1, 100) <= 20);
-        
-        $gridKeys = array_keys($symbols);
+        // Pick multiplier (applied once at the end to sum of all cascade wins)
+        // 1x = 67%, 2x = 15%, 3x = 10%, 5x = 5%, 10x = 2%, 15x = 1%
+        $randMult = rand(1, 100);
+        if ($randMult <= 67)      $multiplier = 1;
+        elseif ($randMult <= 82)  $multiplier = 2;
+        elseif ($randMult <= 92)  $multiplier = 3;
+        elseif ($randMult <= 97)  $multiplier = 5;
+        elseif ($randMult <= 99)  $multiplier = 10;
+        else                      $multiplier = 15;
+
+        // --- Helper: evaluate wins on a given grid ---
+        $evalWins = function(array $grid) use ($symbols, $betSize) {
+            $counts = [];
+            $wildCount = 0;
+            foreach ($grid as $s) {
+                if ($s === 'WILD') $wildCount++;
+                else $counts[$s] = ($counts[$s] ?? 0) + 1;
+            }
+
+            $winningLines = [];
+            $baseWin = 0;
+
+            foreach ($counts as $symbol => $count) {
+                if ($count + $wildCount >= 8) {
+                    $winIndices = [];
+                    foreach ($grid as $idx => $s) {
+                        if ($s === $symbol || $s === 'WILD') $winIndices[] = $idx;
+                    }
+                    $extraMatch = ($count + $wildCount) - 8;
+                    $payoutMult = $symbols[$symbol]['payout'] * (1 + ($extraMatch * 0.5));
+                    $amount = $betSize * $payoutMult;
+                    $baseWin += $amount;
+                    $winningLines[] = [
+                        'line'        => $winIndices,
+                        'symbol'      => $symbol,
+                        'char'        => $symbols[$symbol]['char'],
+                        'match_count' => count($winIndices),
+                        'payout_mult' => $payoutMult,
+                        'amount'      => $amount,
+                    ];
+                }
+            }
+            // Pure WILD win
+            if ($wildCount >= 8) {
+                $winIndices = [];
+                foreach ($grid as $idx => $s) if ($s === 'WILD') $winIndices[] = $idx;
+                $extraMatch = $wildCount - 8;
+                $payoutMult = $symbols['WILD']['payout'] * (1 + ($extraMatch * 1));
+                $amount = $betSize * $payoutMult;
+                $baseWin += $amount;
+                $winningLines[] = [
+                    'line'        => $winIndices,
+                    'symbol'      => 'WILD',
+                    'char'        => $symbols['WILD']['char'],
+                    'match_count' => count($winIndices),
+                    'payout_mult' => $payoutMult,
+                    'amount'      => $amount,
+                ];
+            }
+            return [$winningLines, $baseWin];
+        };
+
+        // --- Helper: grid keys to char array ---
+        $toChars = function(array $grid) use ($symbols) {
+            return array_map(fn($k) => $symbols[$k]['char'], $grid);
+        };
+
+        // --- Generate initial grid (forced win 20% / loss 80%) ---
+        $isWinSpin = (rand(1, 100) <= 9.5);
+        $gridKeys  = array_keys($symbols);
         $grid = [];
-        
+
         if ($isWinSpin) {
-            // Force a win: exactly 8 matching (mix of target and wild)
-            $normalSymbols = ['J', 'Q', 'K', 'A'];
+            $normalSymbols = array_values(array_filter($gridKeys, fn($k) => $k !== 'WILD'));
             $target = $normalSymbols[array_rand($normalSymbols)];
             $wildCount = rand(0, 3);
             $targetCount = 8 - $wildCount;
-            
             for ($i = 0; $i < $targetCount; $i++) $grid[] = $target;
-            for ($i = 0; $i < $wildCount; $i++) $grid[] = 'WILD';
-            
-            // Fill remaining 7 spots with other symbols to ensure no other symbol wins
-            $otherSymbols = array_diff($normalSymbols, [$target]);
-            // Re-index array so array_rand works properly
-            $otherSymbols = array_values($otherSymbols); 
-            for ($i = 0; $i < 7; $i++) {
-                $grid[] = $otherSymbols[array_rand($otherSymbols)];
-            }
+            for ($i = 0; $i < $wildCount; $i++)   $grid[] = 'WILD';
+            $otherSymbols = array_values(array_diff($normalSymbols, [$target]));
+            for ($i = 0; $i < 16; $i++) $grid[] = $otherSymbols[array_rand($otherSymbols)];
             shuffle($grid);
         } else {
-            // Force a loss (80% probability): ensure no symbol + wild >= 8
+            $normalSymbols = array_values(array_filter($gridKeys, fn($k) => $k !== 'WILD'));
             do {
                 $grid = [];
-                $counts = ['J'=>0, 'Q'=>0, 'K'=>0, 'A'=>0, 'WILD'=>0];
-                for ($i = 0; $i < 15; $i++) {
-                    $s = $gridKeys[array_rand($gridKeys)];
-                    $grid[] = $s;
-                    $counts[$s]++;
-                }
-                
+                $cnts = array_fill_keys($gridKeys, 0);
+                for ($i = 0; $i < 24; $i++) { $s = $gridKeys[array_rand($gridKeys)]; $grid[] = $s; $cnts[$s]++; }
                 $isLoss = true;
-                foreach (['J', 'Q', 'K', 'A'] as $s) {
-                    if ($counts[$s] + $counts['WILD'] >= 8) {
-                        $isLoss = false;
-                        break;
-                    }
-                }
-                if ($counts['WILD'] >= 8) $isLoss = false;
-                
+                foreach ($normalSymbols as $s) if ($cnts[$s] + $cnts['WILD'] >= 8) { $isLoss = false; break; }
+                if ($cnts['WILD'] >= 8) $isLoss = false;
             } while (!$isLoss);
         }
-        
-        // Pick a multiplier based on specific probabilities
-        // 1x = 67%, 2x = 15%, 3x = 10%, 5x = 5%, 10x = 2%, 15x = 1%
-        $randMult = rand(1, 100);
-        if ($randMult <= 67) {
-            $multiplier = 1;
-        } elseif ($randMult <= 82) { // 67 + 15
-            $multiplier = 2;
-        } elseif ($randMult <= 92) { // 82 + 10
-            $multiplier = 3;
-        } elseif ($randMult <= 97) { // 92 + 5
-            $multiplier = 5;
-        } elseif ($randMult <= 99) { // 97 + 2
-            $multiplier = 10;
-        } else {
-            $multiplier = 15;
-        }
-        
-        // Count occurrences of each symbol
-        $counts = [];
-        $wildCount = 0;
-        foreach ($grid as $s) {
-            if ($s === 'WILD') {
-                $wildCount++;
-            } else {
-                $counts[$s] = ($counts[$s] ?? 0) + 1;
-            }
-        }
-        
-        $totalWinnings = 0;
-        $winningLines = []; // We'll store winning cell indexes here for the frontend to highlight
-        
-        // Scatter win logic: 8 or more of the same symbol (including WILDs) wins
-        foreach ($counts as $symbol => $count) {
-            if ($count + $wildCount >= 8) {
-                // Determine which cells contributed to this win
-                $winIndices = [];
-                foreach ($grid as $idx => $s) {
-                    if ($s === $symbol || $s === 'WILD') {
-                        $winIndices[] = $idx;
-                    }
-                }
-                
-                // Calculate payout based on base payout and bet
-                // Extra symbols beyond 8 add a small multiplier
-                $extraMatch = ($count + $wildCount) - 8; 
-                $payoutMult = $symbols[$symbol]['payout'] * (1 + ($extraMatch * 0.5)); 
-                $winAmount = $betSize * $payoutMult * $multiplier;
-                
-                $totalWinnings += $winAmount;
-                $winningLines[] = [
-                    'line' => $winIndices, // Frontend expects an array of indexes to highlight
-                    'symbol' => $symbol,
-                    'amount' => $winAmount
-                ];
-            }
-        }
-        
-        // Also check if they hit 8+ WILDs purely on their own
-        if ($wildCount >= 8) {
-            $winIndices = [];
-            foreach ($grid as $idx => $s) {
-                if ($s === 'WILD') $winIndices[] = $idx;
-            }
-            $extraMatch = $wildCount - 8;
-            $payoutMult = $symbols['WILD']['payout'] * (1 + ($extraMatch * 1)); 
-            $winAmount = $betSize * $payoutMult * $multiplier;
-            $totalWinnings += $winAmount;
-            $winningLines[] = [
-                'line' => $winIndices,
-                'symbol' => 'WILD',
-                'amount' => $winAmount
-            ];
-        }
-        
-        $points += $totalWinnings;
 
-        // Convert grid to chars for frontend
-        $gridChars = array_map(function($key) use ($symbols) {
-            return $symbols[$key]['char'];
-        }, $grid);
+        // --- Cascade loop ---
+        $cascades       = [];   // Each entry: { grid, winning_lines, base_win }
+        $totalBaseWin   = 0;
+        $maxCascades    = 10;   // Safety cap
+
+        for ($c = 0; $c < $maxCascades; $c++) {
+            [$winningLines, $baseWin] = $evalWins($grid);
+
+            if (empty($winningLines)) {
+                // No win — store final grid with no wins and stop
+                $cascades[] = [
+                    'grid'          => $toChars($grid),
+                    'winning_lines' => [],
+                    'base_win'      => 0,
+                ];
+                break;
+            }
+
+            // Record this cascade step
+            $totalBaseWin += $baseWin;
+            $cascades[] = [
+                'grid'          => $toChars($grid),
+                'winning_lines' => $winningLines,
+                'base_win'      => $baseWin,
+            ];
+
+            // Collect all winning indices (flatten, dedupe)
+            $allWinIdx = [];
+            foreach ($winningLines as $wl) {
+                foreach ($wl['line'] as $idx) $allWinIdx[$idx] = true;
+            }
+
+            // Replace winning positions with new random symbols
+            foreach (array_keys($allWinIdx) as $idx) {
+                $grid[$idx] = $gridKeys[array_rand($gridKeys)];
+            }
+        }
+
+        // Apply multiplier to total base win
+        $totalWinnings = $totalBaseWin * $multiplier;
+        $points += $totalWinnings;
 
         // Update database
         $stmt = $pdo->prepare("UPDATE games_points SET points = ? WHERE user_id = ?");
         $stmt->execute([$points, $userId]);
 
         echo json_encode([
-            'success' => true,
-            'points' => $points,
-            'grid' => $gridChars,
+            'success'    => true,
+            'points'     => $points,
             'multiplier' => $multiplier,
-            'winning_lines' => $winningLines,
-            'winnings' => $totalWinnings
+            'cascades'   => $cascades,
+            'winnings'   => $totalWinnings,
+            'base_win'   => $totalBaseWin,
         ]);
         exit();
     }
