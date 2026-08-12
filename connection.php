@@ -1,6 +1,6 @@
 <?php
 $host = 'localhost';
-$dbname = 'auth_system';
+$dbname = 'cxi_slt_tracker';
 $username = 'root';
 $password = '';
 
