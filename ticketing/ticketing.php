@@ -47,46 +47,11 @@ $foundEmployees = [];
 $notFoundIds = [];
 $error = null;
 $successMessage = null;
-$showSltMeme = false; // Flag for showing the meme modal
+$showSelfTicketWarning = false; // Professional confirmation flag
 
 $currentDate = new DateTime();
 $currentDate->modify('this week monday');
 $mondayDate = $currentDate->format('m/d/Y');
-
-$sarcasticMessages = [
-    "Wait, aren't YOU the one supposed to be fixing things? Why are you asking for help? Go send a ticket to yourself.",
-    "Plot twist: The SLT needs help. I'm just a script, buddy, I can't save you.",
-    "Look at me. Look at me. YOU are the SLT now. Put the ticket away.",
-    "Error 404: Irony found. The fixer is looking for a fix.",
-    "Who watches the watchmen? Apparently, no one, since you're trying to send a ticket right now.",
-    "I was programmed to assist users, not to hold the developer's hand. Try turning yourself off and on again.",
-    "Did you try turning it off and on again? Oh wait, that's your line.",
-    "Self-ticketing? Is this what rock bottom looks like?",
-    "I'm sorry, Dave. I'm afraid I can't do that. You're the IT support.",
-    "You have become the very thing you swore to destroy: a user needing support.",
-    "Ticket submitted. Assignee: You. Good luck.",
-    "Blinking cursor of judgment right here. You should know better.",
-    "Have you tried explaining it to the rubber duck on your desk yet?",
-    "I'll just route this ticket straight to your own queue. Let me know when you fix it.",
-    "Is the IT guy asking for IT support? The matrix is definitely glitching.",
-    "Oh, how the mighty have fallen. Do you need me to Google that for you?",
-    "Alert: A severe breach in the space-time continuum detected! IT is submitting an IT ticket.",
-    "Let me escalate this to Tier 3. Oh wait... that's you.",
-    "Are you sure it's plugged in? Just checking, since we're roleplaying as regular users today.",
-    "Please Ctrl+Z your life choices leading up to this moment."
-];
-
-$randomMessage = $sarcasticMessages[array_rand($sarcasticMessages)];
-$safeMessage = addslashes($randomMessage);
-
-$sltMemes = [
-    'meme1.gif',
-    'meme2.gif',
-    'meme3.gif',
-    'meme4.gif',
-    'meme5.gif'
-];
-$randomMeme = $sltMemes[array_rand($sltMemes)];
 
 // Check for success parameter in URL
 if (isset($_GET['success'])) {
@@ -108,6 +73,7 @@ if (isset($_POST['submitEID'])) {
     }
 
     $eids = array_filter(array_map('trim', $eids));
+    $eids = array_map('strtoupper', $eids);
     $eids = array_unique($eids);
 
     if (empty($eids)) {
@@ -118,8 +84,8 @@ if (isset($_POST['submitEID'])) {
             $stmtSlt = $pdo->prepare("SELECT username FROM users WHERE username = :eid");
             $stmtSlt->execute(['eid' => $singleEid]);
             if ($stmtSlt->fetch()) {
-                // Trigger the meme modal instead of a generic alert
-                $showSltMeme = true;
+                // Trigger the professional warning modal
+                $showSelfTicketWarning = true;
             }
         }
 
@@ -240,7 +206,6 @@ if (isset($_POST['submitTix'])) {
                             
                             // Attempt to fetch the Work_Number field from the database based on inserted ID
                             try {
-                                // FIXED: Use the correct 'ticket' table (singular) to match submit_ticket.php
                                 $stmtWN = $pdo->prepare("SELECT Work_Number FROM ticket WHERE id = :id");
                                 $stmtWN->execute(['id' => $insertedId]);
                                 if ($wn = $stmtWN->fetchColumn()) {
@@ -334,15 +299,20 @@ if (isset($_POST['submitTix'])) {
         .drop-zone { transition: all 0.3s ease; }
         .drop-zone.dragover { border-color: #0ea5e9; background-color: rgba(14, 165, 233, 0.1); }
         [color-scheme="dark"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; cursor: pointer; }
+        .glass-panel {
+            background: rgba(31, 41, 55, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-auth min-h-screen flex flex-col items-center justify-center p-4 font-sans text-gray-200">
     
     <div class="w-full max-w-2xl animate-fade-in my-8">
-        <div class="bg-gray-800/60 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden border border-gray-700/50">
+        <div class="bg-gray-800/60 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-700/50">
             
-            <div class="p-8 border-b border-gray-700/50 relative overflow-hidden">
+            <div class="p-8 border-b border-gray-700/50 relative overflow-hidden rounded-t-2xl">
                 <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary-500 via-purple-500 to-primary-500"></div>
                 <div class="flex justify-center mb-6">
                      <div class="bg-white/10 p-4 rounded-full shadow-lg shadow-primary-900/20 backdrop-blur-sm border border-white/5">
@@ -354,10 +324,38 @@ if (isset($_POST['submitTix'])) {
             </div>
 
             <div class="p-8">
+                
+                <!-- VISUAL WIZARD / STEPPER -->
+                <div class="mb-10 w-full flex items-center justify-center relative">
+                    <div class="flex items-center justify-between w-full max-w-sm relative z-10">
+                        <!-- Step 1 -->
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-all duration-300 <?= empty($foundEmployees) ? 'bg-primary-600 border-primary-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' : 'bg-gray-800 border-primary-500 text-primary-400' ?>">
+                                <?= empty($foundEmployees) ? '1' : '<i class="fas fa-check"></i>' ?>
+                            </div>
+                            <span class="text-xs font-bold uppercase tracking-wider <?= empty($foundEmployees) ? 'text-primary-400' : 'text-gray-400' ?>">Identify</span>
+                        </div>
+                        
+                        <!-- Line -->
+                        <div class="flex-1 h-1 mx-4 bg-gray-700 rounded-full relative overflow-hidden mt-[-20px]">
+                            <div class="absolute top-0 left-0 h-full bg-primary-500 transition-all duration-500" style="width: <?= empty($foundEmployees) ? '0%' : '100%' ?>"></div>
+                        </div>
+                        
+                        <!-- Step 2 -->
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold border-2 transition-all duration-300 <?= empty($foundEmployees) ? 'bg-gray-800 border-gray-700 text-gray-600' : 'bg-primary-600 border-primary-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' ?>">
+                                2
+                            </div>
+                            <span class="text-xs font-bold uppercase tracking-wider <?= empty($foundEmployees) ? 'text-gray-600' : 'text-primary-400' ?>">Details</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALERTS -->
                 <?php if ($successMessage): ?>
-                    <div class="bg-green-500/20 border border-green-500/40 text-green-200 px-4 py-4 rounded-xl mb-6 flex items-start gap-3 shadow-lg shadow-green-900/20">
+                    <div id="successAlert" class="bg-green-500/20 border border-green-500/40 text-green-200 px-4 py-4 rounded-xl mb-6 flex items-start gap-3 shadow-lg shadow-green-900/20 animate-fade-in">
                         <i class="fas fa-check-circle mt-1 text-green-400"></i>
-                        <div>
+                        <div class="flex-1">
                             <p class="font-semibold">Success</p>
                             <p class="text-sm opacity-90"><?= $successMessage ?></p>
                         </div>
@@ -365,30 +363,38 @@ if (isset($_POST['submitTix'])) {
                 <?php endif; ?>
 
                 <?php if ($error): ?>
-                    <div class="bg-red-500/20 border border-red-500/40 text-red-200 px-4 py-4 rounded-xl mb-6 flex items-start gap-3 shadow-lg shadow-red-900/20">
+                    <div id="errorAlert" class="bg-red-500/20 border border-red-500/40 text-red-200 px-4 py-4 rounded-xl mb-6 flex items-start gap-3 shadow-lg shadow-red-900/20 animate-fade-in relative pr-10">
                         <i class="fas fa-exclamation-triangle mt-1 text-red-400"></i>
-                        <div>
+                        <div class="flex-1">
                             <p class="font-semibold">Attention Needed</p>
                             <p class="text-sm opacity-90"><?= htmlspecialchars($error) ?></p>
                         </div>
+                        <button onclick="document.getElementById('errorAlert').style.display='none'" type="button" class="absolute top-4 right-4 text-red-400 hover:text-red-200 transition-colors p-1" title="Dismiss">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 <?php endif; ?>
 
                 <?php if (empty($foundEmployees)): ?>
                     <form method="POST" class="space-y-6" id="searchForm">
+                        <input type="hidden" name="submitEID" value="1">
                         <div class="text-center mb-6">
                             <h3 class="text-lg font-medium text-white">Identify Employee(s)</h3>
-                            <p class="text-xs text-gray-400">Enter one or more Employee IDs to begin.</p>
+                            <p class="text-xs text-gray-400">Search by Name or enter Employee ID.</p>
                         </div>
 
                         <div id="eid-container" class="space-y-3">
                             <div class="eid-row relative group">
-                                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1 mb-1 block">Employee ID</label>
-                                <div class="flex gap-2">
+                                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1 mb-1 block">Employee Search</label>
+                                <div class="flex gap-2 relative">
                                     <div class="relative w-full">
-                                        <input type="text" name="eid[]" class="w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-primary-500 outline-none transition-all" placeholder="e.g., CXI00001" required>
+                                        <input type="text" name="eid[]" class="employee-search-input w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-primary-500 outline-none transition-all uppercase" placeholder="e.g., JUAN DELA CRUZ or CXI0001" required autocomplete="off">
                                         <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                            <i class="fas fa-id-card text-gray-500"></i>
+                                            <i class="fas fa-search text-gray-500"></i>
+                                        </div>
+                                        
+                                        <!-- Search Results Dropdown -->
+                                        <div class="employee-search-results hidden absolute top-full left-0 z-50 mt-1 w-full glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scroll">
                                         </div>
                                     </div>
                                     <button type="button" onclick="addEidField()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-primary-400 border border-gray-600 rounded-lg transition-colors" title="Add another Employee">
@@ -399,9 +405,9 @@ if (isset($_POST['submitTix'])) {
                         </div>
 
                         <div class="pt-4">
-                            <button type="submit" name="submitEID" class="group w-full py-3.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-lg shadow-primary-900/50 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5">
-                                <span>Search Employees</span>
-                                <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                            <button type="submit" class="group w-full py-3.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-lg shadow-primary-900/50 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5">
+                                <span class="btn-text">Continue to Ticket</span>
+                                <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform btn-icon"></i>
                             </button>
                         </div>
                     </form>
@@ -415,11 +421,12 @@ if (isset($_POST['submitTix'])) {
                                 Selected Employee(s)
                             </h3>
                             <button type="button" onclick="openAddModal()" class="text-xs flex items-center gap-1 bg-primary-600/20 hover:bg-primary-600/40 text-primary-300 px-3 py-1.5 rounded-lg border border-primary-500/30 transition-all">
-                                <i class="fas fa-plus"></i> Add Employee
+                                <i class="fas fa-plus"></i> Add
                             </button>
                         </div>
                         
-                        <div id="selected-employees-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scroll pr-1">
+                        <!-- Fixed Mobile Ergonomics: sm:max-h-60 but max-h-40 on mobile -->
+                        <div id="selected-employees-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 sm:max-h-60 overflow-y-auto custom-scroll pr-1">
                             <?php foreach ($foundEmployees as $emp): ?>
                             <div class="employee-card bg-gray-700/40 border border-gray-600/50 rounded-lg flex items-stretch gap-0 relative group transition-all overflow-hidden" data-id="<?= htmlspecialchars($emp['employee_id']) ?>">
                                 <div class="p-3 flex items-center gap-3 flex-1 min-w-0">
@@ -442,6 +449,7 @@ if (isset($_POST['submitTix'])) {
                     <hr class="border-gray-700/50 mb-8">
 
                     <form id="ticketForm" method="POST" enctype="multipart/form-data" class="space-y-5">
+                        <input type="hidden" name="submitTix" value="1">
                         <input type="hidden" id="target_employee_ids" name="target_employee_ids" value='<?= json_encode(array_column($foundEmployees, 'employee_id')) ?>'>
                         <input type="hidden" name="urgency" id="urgency" value="">
 
@@ -461,7 +469,7 @@ if (isset($_POST['submitTix'])) {
                             </div>
                             <div>
                                 <label for="stationNumber" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Station Number</label>
-                                <input class="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-primary-500 outline-none transition" type="text" id="stationNumber" name="Station_Number" placeholder="e.g., STN-105" required>
+                                <input class="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-primary-500 outline-none transition uppercase" type="text" id="stationNumber" name="Station_Number" placeholder="e.g., STN-105" required>
                             </div>
                         </div>
 
@@ -470,25 +478,35 @@ if (isset($_POST['submitTix'])) {
                             <div class="relative">
                                 <select class="w-full pl-4 pr-10 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-primary-500 outline-none appearance-none transition" id="issues" name="Issues_Concerning" required>
                                     <option value="" selected disabled>What seems to be the problem?</option>
-                                    <option value="Keyboard">Keyboard Malfunction</option>
-                                    <option value="Mouse">Mouse Malfunction</option>
-                                    <option value="Headset">Headset / Audio Issue</option>
-                                    <option value="Monitor">Monitor / Display Issue</option>
-                                    <option value="Internet">Internet Connectivity</option>
-                                    <option value="NT Login Issue">NT Login / Account Locked</option>
-                                    <option value="Client Tool/System Issue">Client Tool / App Crash</option>
-                                    <option value="Full Storage">Full Disk Storage</option>
-                                    <option value="Windows tools error">Windows OS Error</option>
-                                    <option value="HRIS Concern">HRIS Concern</option>
-                                    <option value="Other">Other Inquiry</option>
+                                    <optgroup label="Hardware">
+                                        <option value="Keyboard">Keyboard Malfunction</option>
+                                        <option value="Mouse">Mouse Malfunction</option>
+                                        <option value="Headset">Headset / Audio Issue</option>
+                                        <option value="Monitor">Monitor / Display Issue</option>
+                                    </optgroup>
+                                    <optgroup label="System & Network">
+                                        <option value="Internet">Internet Connectivity</option>
+                                        <option value="NT Login Issue">NT Login / Account Locked</option>
+                                        <option value="Client Tool/System Issue">Client Tool / App Crash</option>
+                                        <option value="Windows tools error">Windows OS Error</option>
+                                        <option value="Full Storage">Full Disk Storage</option>
+                                    </optgroup>
+                                    <optgroup label="Other Concerns">
+                                        <option value="HRIS Concern">HRIS Concern</option>
+                                        <option value="Other">Other Inquiry</option>
+                                    </optgroup>
                                 </select>
                                 <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
                                     <i class="fas fa-chevron-down"></i>
                                 </div>
                             </div>
                             
+                            <!-- Transparency in Priority Assignment -->
                             <div class="flex items-center justify-between mt-2 min-h-[24px]">
-                                <div id="urgency-display" class="text-xs font-bold px-2 py-1 rounded bg-gray-700 text-gray-300 hidden"></div>
+                                <div class="flex items-center gap-2">
+                                    <div id="urgency-display" class="text-xs font-bold px-2 py-1 rounded bg-gray-700 text-gray-300 hidden"></div>
+                                    <i id="urgency-info" class="fas fa-info-circle text-gray-500 hover:text-gray-300 text-xs cursor-help hidden" title="Priority is automatically assigned based on the issue category to ensure critical system down events are handled first."></i>
+                                </div>
                             </div>
                             <div id="troubleshootingTip" class="mt-2 p-3 text-sm bg-blue-900/30 border border-blue-500/30 text-blue-200 rounded-lg hidden animate-fade-in"></div>
 
@@ -508,7 +526,6 @@ if (isset($_POST['submitTix'])) {
                                 <div id="hrisScheduleFlow" class="hidden space-y-4 animate-fade-in">
                                     <div class="space-y-2">
                                         <p class="text-sm font-medium text-gray-300">No Plotted Schedule?</p>
-                                        <!-- NEW NOTE ADDED HERE -->
                                         <p class="text-xs text-yellow-400/90 italic mb-2 bg-yellow-900/20 border border-yellow-700/50 p-2 rounded">
                                             <i class="fas fa-exclamation-circle mr-1"></i> <strong>Note:</strong> Make sure to specify the date and the time of your OT/Shift/Rest Day in the details box below.
                                         </p>
@@ -605,9 +622,9 @@ if (isset($_POST['submitTix'])) {
                             <div class="drop-zone relative w-full h-32 rounded-lg border-2 border-dashed border-gray-600 bg-gray-900/50 flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 transition-all group overflow-hidden" id="dropZone">
                                 <input type="file" name="issue_img" id="fileInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*">
                                 
-                                <div id="dropZoneEmpty" class="flex flex-col items-center text-gray-500 group-hover:text-primary-400 pointer-events-none">
+                                <div id="dropZoneEmpty" class="flex flex-col items-center text-gray-500 group-hover:text-primary-400 pointer-events-none px-4 text-center">
                                     <i class="fas fa-cloud-upload-alt text-2xl mb-2"></i>
-                                    <p class="text-xs">Drag & drop or <span class="underline">paste</span> image here</p>
+                                    <p class="text-xs">Tap, drag & drop, or <span class="underline">paste</span> image here</p>
                                 </div>
 
                                 <div id="dropZonePreview" class="hidden w-full h-full relative">
@@ -620,9 +637,9 @@ if (isset($_POST['submitTix'])) {
                         </div>
 
                         <div class="pt-4 flex flex-col sm:flex-row gap-4">
-                            <button id="submitBtn" class="flex-1 py-3.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-lg shadow-primary-900/50 transition-all duration-200 flex items-center justify-center gap-2" type="submit" name="submitTix">
-                                <i class="fas fa-paper-plane"></i>
-                                <span>Submit Ticket(s)</span>
+                            <button id="submitBtn" class="flex-1 py-3.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-lg shadow-primary-900/50 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5" type="submit">
+                                <span class="btn-icon"><i class="fas fa-paper-plane"></i></span>
+                                <span class="btn-text">Submit Ticket(s)</span>
                             </button>
                             <a class="sm:w-auto w-full py-3.5 px-6 border border-gray-600 hover:bg-gray-700 hover:text-white text-gray-400 font-medium rounded-xl transition duration-200 flex items-center justify-center" href="<?= $_SERVER['PHP_SELF'] ?>">
                                 Cancel
@@ -639,17 +656,20 @@ if (isset($_POST['submitTix'])) {
     <div id="addEmployeeModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md p-6 transform scale-95 transition-transform duration-200">
             <h3 class="text-lg font-bold text-white mb-4">Add Another Employee</h3>
-            <div class="mb-4">
-                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Employee ID</label>
+            <div class="mb-4 relative">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Employee Search</label>
                 <div class="relative">
-                    <input type="text" id="newEidInput" class="w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary-500 outline-none" placeholder="e.g., CXI00002">
+                    <input type="text" id="newEidInput" class="w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary-500 outline-none uppercase" placeholder="Name or CXI00002" autocomplete="off">
                     <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-500">
-                        <i class="fas fa-user-plus"></i>
+                        <i class="fas fa-search"></i>
                     </div>
+                </div>
+                <!-- Modal Search Results -->
+                <div id="modalSearchResults" class="hidden absolute top-full left-0 z-50 mt-1 w-full glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scroll">
                 </div>
                 <p id="modalError" class="text-red-400 text-xs mt-2 hidden"></p>
             </div>
-            <div class="flex justify-end gap-3">
+            <div class="flex justify-end gap-3 mt-12">
                 <button onclick="closeAddModal()" class="px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-700 transition">Cancel</button>
                 <button onclick="fetchAndAddEmployee()" id="modalAddBtn" class="px-4 py-2 bg-primary-600 rounded-lg text-white hover:bg-primary-500 transition flex items-center gap-2">
                     <span>Add</span>
@@ -659,30 +679,28 @@ if (isset($_POST['submitTix'])) {
         </div>
     </div>
 
-    <!-- SLT MEME ALERT MODAL -->
-    <?php if ($showSltMeme): ?>
-    <div id="sltMemeModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] animate-fade-in">
-        <div class="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md p-6 transform animate-pop-in relative text-center">
-            <button onclick="document.getElementById('sltMemeModal').remove()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+    <!-- SELF TICKETING CONFIRMATION MODAL -->
+    <?php if ($showSelfTicketWarning): ?>
+    <div id="selfTicketWarningModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] animate-fade-in">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-sm p-6 transform animate-pop-in relative text-center">
+            <button onclick="window.location.href = window.location.pathname;" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
             
-            <h3 class="text-xl font-bold text-primary-400 mb-4 flex items-center justify-center gap-2 uppercase tracking-widest">
-                <i class="fas fa-robot"></i> SLT Detected
-            </h3>
-            
-            <div class="rounded-lg overflow-hidden border border-gray-600 mb-4 bg-gray-900">
-                <img src="<?= htmlspecialchars($randomMeme) ?>" alt="SLT Meme" class="w-full h-auto object-cover">
+            <div class="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
+                <i class="fas fa-exclamation-triangle text-3xl text-yellow-500"></i>
             </div>
             
-            <p class="text-gray-300 font-medium italic mb-6">"<?= htmlspecialchars($randomMessage) ?>"</p>
+            <h3 class="text-xl font-bold text-gray-100 mb-2">Self-Ticketing Detected</h3>
+            
+            <p class="text-gray-400 text-sm mb-6">You are about to submit a ticket for your own account. Are you sure you want to proceed?</p>
             
             <div class="flex flex-col gap-3">
-                <button onclick="window.location.href = window.location.pathname;" class="w-full py-3 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2">
-                    <i class="fas fa-person-walking-arrow-right"></i> Go back in shame
+                <button onclick="document.getElementById('selfTicketWarningModal').remove()" class="w-full py-3 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2">
+                    Yes, proceed
                 </button>
-                <button onclick="document.getElementById('sltMemeModal').remove()" class="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold rounded-xl transition-colors border border-gray-600">
-                    I have no shame, proceed anyway
+                <button onclick="window.location.href = window.location.pathname;" class="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold rounded-xl transition-colors border border-gray-600">
+                    Cancel
                 </button>
             </div>
         </div>
@@ -693,16 +711,114 @@ if (isset($_POST['submitTix'])) {
     <script>
         let currentEmployeeIds = <?= !empty($foundEmployees) ? json_encode(array_column($foundEmployees, 'employee_id')) : '[]' ?>;
 
+        // Form Submit Loading States
+        $('#searchForm').on('submit', function() {
+            if (this.checkValidity()) {
+                const btn = $(this).find('button[type="submit"]');
+                btn.prop('disabled', true)
+                   .removeClass('hover:-translate-y-0.5 hover:bg-primary-500')
+                   .addClass('opacity-75 cursor-not-allowed')
+                   .find('.btn-icon').removeClass('fa-arrow-right group-hover:translate-x-1').addClass('fa-spinner fa-spin');
+                btn.find('.btn-text').text('Searching...');
+            }
+        });
+
+        $('#ticketForm').on('submit', function() {
+            if (this.checkValidity()) {
+                const btn = $('#submitBtn');
+                btn.prop('disabled', true)
+                   .removeClass('hover:-translate-y-0.5 hover:bg-primary-500')
+                   .addClass('opacity-75 cursor-not-allowed')
+                   .find('.btn-icon').html('<i class="fas fa-spinner fa-spin"></i>');
+                btn.find('.btn-text').text('Submitting...');
+            }
+        });
+
+        // --- Autocomplete Logic ---
+        function searchEmployeesAutocomplete(query, resultsContainer, inputElement) {
+            if (query.length < 2) {
+                resultsContainer.classList.add('hidden');
+                return;
+            }
+
+            fetch('../api/search_employees.php?query=' + encodeURIComponent(query))
+                .then(response => response.json())
+                .then(data => {
+                    resultsContainer.innerHTML = '';
+                    
+                    if (data.success && data.employees.length > 0) {
+                        data.employees.forEach(employee => {
+                            const item = document.createElement('div');
+                            item.className = 'px-4 py-3 hover:bg-gray-700/50 cursor-pointer border-b border-gray-700/50 transition-colors flex flex-col';
+                            item.innerHTML = `
+                                <span class="font-bold text-gray-200">${employee.employee_id}</span>
+                                <span class="text-xs text-gray-400 uppercase">${employee.full_name}</span>
+                            `;
+                            item.addEventListener('click', () => {
+                                inputElement.value = employee.employee_id;
+                                resultsContainer.classList.add('hidden');
+                                
+                                // Auto-trigger search/add if it's the modal
+                                if (inputElement.id === 'newEidInput') {
+                                    fetchAndAddEmployee();
+                                }
+                            });
+                            resultsContainer.appendChild(item);
+                        });
+                        resultsContainer.classList.remove('hidden');
+                    } else {
+                        const item = document.createElement('div');
+                        item.className = 'px-4 py-4 text-sm text-gray-400 italic bg-gray-800/80';
+                        item.textContent = 'No matching employees found.';
+                        resultsContainer.appendChild(item);
+                        resultsContainer.classList.remove('hidden');
+                    }
+                })
+                .catch(error => console.error('Autocomplete Error:', error));
+        }
+
+        // Delegate event for dynamic main form inputs
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('employee-search-input')) {
+                const resultsContainer = e.target.closest('.relative').querySelector('.employee-search-results');
+                if(resultsContainer) {
+                    searchEmployeesAutocomplete(e.target.value, resultsContainer, e.target);
+                }
+            }
+        });
+
+        // Event for Modal Input
+        const modalInput = document.getElementById('newEidInput');
+        if(modalInput) {
+            modalInput.addEventListener('input', function() {
+                const resultsContainer = document.getElementById('modalSearchResults');
+                searchEmployeesAutocomplete(this.value, resultsContainer, this);
+            });
+        }
+
+        // Hide results on outside click
+        document.addEventListener('click', function(e) {
+            const isSearchInput = e.target.classList.contains('employee-search-input') || e.target.id === 'newEidInput';
+            const isResultsContainer = e.target.closest('.employee-search-results') || e.target.closest('#modalSearchResults');
+            
+            if (!isSearchInput && !isResultsContainer) {
+                document.querySelectorAll('.employee-search-results, #modalSearchResults').forEach(el => {
+                    if(el) el.classList.add('hidden');
+                });
+            }
+        });
+
         function addEidField() {
             const container = document.getElementById('eid-container');
             const div = document.createElement('div');
             div.className = 'eid-row flex gap-2 animate-fade-in mt-3';
             div.innerHTML = `
                 <div class="relative w-full">
-                    <input type="text" name="eid[]" class="w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all" placeholder="Another Employee ID">
+                    <input type="text" name="eid[]" class="employee-search-input w-full pl-10 pr-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all uppercase" placeholder="Another Employee" autocomplete="off">
                     <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <i class="fas fa-user-plus text-gray-500"></i>
+                        <i class="fas fa-search text-gray-500"></i>
                     </div>
+                    <div class="employee-search-results hidden absolute top-full left-0 z-50 mt-1 w-full glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scroll"></div>
                 </div>
                 <button type="button" onclick="removeEidField(this)" class="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 text-red-400 rounded-lg transition-colors" title="Remove">
                     <i class="fas fa-trash-alt"></i>
@@ -723,6 +839,7 @@ if (isset($_POST['submitTix'])) {
             document.getElementById('newEidInput').value = '';
             document.getElementById('newEidInput').focus();
             document.getElementById('modalError').classList.add('hidden');
+            document.getElementById('modalSearchResults').classList.add('hidden');
         }
 
         function closeAddModal() {
@@ -751,19 +868,19 @@ if (isset($_POST['submitTix'])) {
         }
 
         function fetchAndAddEmployee() {
-            const eid = document.getElementById('newEidInput').value.trim();
+            const eid = document.getElementById('newEidInput').value.trim().toUpperCase();
             const btn = document.getElementById('modalAddBtn');
             const loader = document.getElementById('modalLoader');
             const errorMsg = document.getElementById('modalError');
 
             if (!eid) {
-                errorMsg.textContent = "Please enter an ID.";
+                errorMsg.textContent = "Please select or enter an ID.";
                 errorMsg.classList.remove('hidden');
                 return;
             }
 
             if (currentEmployeeIds.includes(eid)) {
-                errorMsg.textContent = "Employee ID '" + eid + "' is already in the list.";
+                errorMsg.textContent = "Employee '" + eid + "' is already in the list.";
                 errorMsg.classList.remove('hidden');
                 const input = document.getElementById('newEidInput');
                 input.classList.add('border-red-500', 'animate-pulse');
@@ -812,7 +929,7 @@ if (isset($_POST['submitTix'])) {
                         document.getElementById('count-display').textContent = currentEmployeeIds.length;
                         closeAddModal();
                     } else {
-                        errorMsg.textContent = "Employee ID '" + emp.employee_id + "' is already in the list.";
+                        errorMsg.textContent = "Employee '" + emp.employee_id + "' is already in the list.";
                         errorMsg.classList.remove('hidden');
                     }
                 } else {
@@ -830,8 +947,11 @@ if (isset($_POST['submitTix'])) {
         function updateHiddenInput() {
             document.getElementById('target_employee_ids').value = JSON.stringify(currentEmployeeIds);
             const btnText = currentEmployeeIds.length > 1 ? `Submit Multiple Tickets (${currentEmployeeIds.length})` : "Submit Ticket";
-            const btn = document.getElementById('submitBtn');
-            if(btn) btn.innerHTML = `<i class="fas fa-paper-plane"></i> <span>${btnText}</span>`;
+            
+            const btnTextSpan = document.querySelector('#submitBtn .btn-text');
+            if(btnTextSpan) {
+                btnTextSpan.textContent = btnText;
+            }
         }
 
         // --- Image Drop Zone Logic ---
@@ -915,8 +1035,10 @@ if (isset($_POST['submitTix'])) {
 
         // --- Common UI & HRIS Workflow Logic ---
         $(document).ready(function() {
+            
+            // Only auto-fade success alerts, not error alerts.
             setTimeout(function() {
-                $('.bg-red-500\\/20, .bg-green-500\\/20').fadeOut('slow');
+                $('#successAlert').fadeOut('slow');
             }, 6000);
 
             function setUrgencyBasedOnIssue(issue) {
@@ -931,11 +1053,11 @@ if (isset($_POST['submitTix'])) {
             function toggleSubmitButton(enable) {
                 const btn = $('#submitBtn');
                 if (enable) {
-                    btn.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed bg-gray-600 hover:bg-gray-600').addClass('bg-primary-600 hover:bg-primary-500');
-                    btn.find('span').text(currentEmployeeIds.length > 1 ? `Submit Multiple Tickets (${currentEmployeeIds.length})` : "Submit Ticket");
+                    btn.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed bg-gray-600 hover:bg-gray-600').addClass('bg-primary-600 hover:bg-primary-500 hover:-translate-y-0.5');
+                    btn.find('.btn-text').text(currentEmployeeIds.length > 1 ? `Submit Multiple Tickets (${currentEmployeeIds.length})` : "Submit Ticket");
                 } else {
-                    btn.prop('disabled', true).addClass('opacity-50 cursor-not-allowed bg-gray-600 hover:bg-gray-600').removeClass('bg-primary-600 hover:bg-primary-500');
-                    btn.find('span').text("Action Required First");
+                    btn.prop('disabled', true).addClass('opacity-50 cursor-not-allowed bg-gray-600 hover:bg-gray-600').removeClass('bg-primary-600 hover:bg-primary-500 hover:-translate-y-0.5');
+                    btn.find('.btn-text').text("Action Required First");
                 }
             }
             
@@ -946,7 +1068,9 @@ if (isset($_POST['submitTix'])) {
                 
                 $('#urgency').val(urgency);
                 var urgencyClass = urgency === 'HIGH' ? 'text-red-400 bg-red-900/50' : (urgency === 'MEDIUM' ? 'text-yellow-400 bg-yellow-900/50' : 'text-green-400 bg-green-900/50');
+                
                 $('#urgency-display').removeClass().addClass('text-xs font-bold px-2 py-1 rounded inline-block ' + urgencyClass).text(urgency + ' PRIORITY').fadeIn();
+                $('#urgency-info').fadeIn();
                 
                 var tipContainer = $('#troubleshootingTip');
                 var tips = {

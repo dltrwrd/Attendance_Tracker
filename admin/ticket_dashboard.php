@@ -387,6 +387,16 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
                             </select>
                         </div>
 
+                        <!-- Site Toggle -->
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Site</label>
+                            <div class="flex bg-gray-900 rounded-lg border border-gray-600 p-0.5">
+                                <button id="btnFilterSiteAll" onclick="setSiteFilter('ALL')" class="px-4 py-1.5 text-xs font-semibold rounded bg-gray-600 text-white shadow-sm transition-colors">All</button>
+                                <button id="btnFilterSiteKawit" onclick="setSiteFilter('KAWIT')" class="px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">Kawit</button>
+                                <button id="btnFilterSiteBacoor" onclick="setSiteFilter('BACOOR')" class="px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">Bacoor</button>
+                            </div>
+                        </div>
+
                         <!-- Status Toggle -->
                         <div class="flex flex-col gap-1.5">
                             <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</label>
@@ -406,21 +416,19 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
                     </div>
                 </div>
                 
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto min-h-[400px]">
                     <table class="min-w-full divide-y divide-gray-700 w-full" style="zoom: 95%">
                         <thead class="bg-gray-900/50">
                             <tr>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Work #</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Emp ID</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-                                <th scope="col" class="hide-on-preview px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider transition-all">Station</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Dept</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Concern</th>
-                                <th scope="col" class="hide-on-preview px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider transition-all">Received</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">SLT</th>
-                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Date</th>
-                                <th scope="col" class="hide-on-preview px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider transition-all"></th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Work #</th>
+                                <th scope="col" class="hide-on-preview px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider transition-all">Emp ID</th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Name</th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Dept</th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Concern</th>
+                                <th scope="col" class="px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Wait Time</th>
+                                <th scope="col" class="hide-on-preview px-4 py-4 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider transition-all">SLT</th>
+                                <th scope="col" class="hide-on-preview px-4 py-4 text-right text-[11px] font-bold text-gray-400 uppercase tracking-wider transition-all">Action</th>
                             </tr>
                         </thead>
                         <tbody id="ticket-table-body" class="bg-gray-800 divide-y divide-gray-700">
@@ -539,6 +547,23 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
             </div>
         </div>
 
+        <!-- NEW: Quick Resolve Modal -->
+        <div id="quickResolveModal" class="fixed inset-0 z-[150] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center transition-opacity duration-300">
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-2xl w-full max-w-md animate-fade-in-up">
+                <h3 class="text-lg font-bold text-white mb-1">Quick Resolve <span id="qrWorkNumber" class="text-blue-400"></span></h3>
+                <p id="qrIssue" class="text-gray-400 text-sm mb-4 truncate"></p>
+                <textarea id="qrResolution" rows="3" class="w-full bg-gray-900 border border-gray-600 focus:border-green-500 focus:ring-1 focus:ring-green-500 rounded-lg text-white p-3 mb-4 text-sm transition-colors" placeholder="Type how you fixed this issue..."></textarea>
+                <input type="hidden" id="qrTicketId">
+                <div class="flex gap-3 justify-end">
+                    <button onclick="closeQuickResolve()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors">Cancel</button>
+                    <button onclick="submitQuickResolve()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-semibold shadow-lg shadow-green-900/30 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Resolve Ticket
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </main>
 </div>
 
@@ -550,6 +575,13 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
     }
     .animate-fade-in-up {
         animation: fadeInUp 0.3s ease-out forwards;
+    }
+    .pulse-urgent {
+        animation: urgentPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes urgentPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .6; }
     }
 </style>
 
@@ -581,6 +613,74 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         if(confirmCallback) confirmCallback();
         closeConfirmModal();
     });
+
+    // NEW: Quick Resolve Logic
+    function openQuickResolve(event, ticketId, workNumber, issue) {
+        event.stopPropagation(); // Prevents opening the side panel
+        document.getElementById('qrTicketId').value = ticketId;
+        document.getElementById('qrWorkNumber').textContent = '#' + workNumber;
+        document.getElementById('qrIssue').textContent = issue;
+        document.getElementById('qrResolution').value = '';
+        document.getElementById('quickResolveModal').classList.remove('hidden');
+    }
+    
+    function closeQuickResolve() {
+        document.getElementById('quickResolveModal').classList.add('hidden');
+    }
+
+    function submitQuickResolve() {
+        const ticketId = document.getElementById('qrTicketId').value;
+        const resolution = document.getElementById('qrResolution').value;
+        if (resolution.trim() === '') {
+            showNotification('Please provide resolution details.', true);
+            return;
+        }
+        executeResolve(ticketId, resolution);
+        closeQuickResolve();
+    }
+
+    // NEW: Wait Time Calculator (Now includes seconds for real-time feel)
+    function calculateWaitTime(timestampStr, status) {
+        if (status !== 'PENDING' || !timestampStr) return '-';
+        
+        const ticketTime = new Date(timestampStr).getTime();
+        const now = new Date().getTime();
+        const diffMs = now - ticketTime;
+        
+        if (isNaN(diffMs) || diffMs < 0) return 'Just now';
+        
+        const diffSecs = Math.floor(diffMs / 1000);
+        const diffMins = Math.floor(diffSecs / 60);
+        
+        if (diffMins < 60) {
+            const secs = diffSecs % 60;
+            // Pad seconds with leading zero for clean UI
+            const paddedSecs = secs < 10 ? '0' + secs : secs;
+            return `<span class="text-yellow-400 font-bold">${diffMins}m ${paddedSecs}s</span>`;
+        }
+        
+        const hours = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        
+        if (hours < 24) return `<span class="text-orange-400 font-bold">${hours}h ${mins}m</span>`;
+        
+        const days = Math.floor(hours / 24);
+        return `<span class="text-red-400 font-bold">${days}d ${hours % 24}h</span>`;
+    }
+
+    // NEW: Background loop to update counters every second
+    function updateAllWaitTimes() {
+        document.querySelectorAll('.wait-time-cell').forEach(cell => {
+            const timestamp = cell.getAttribute('data-timestamp');
+            const status = cell.getAttribute('data-status');
+            if (status === 'PENDING') {
+                cell.innerHTML = calculateWaitTime(timestamp, status);
+            }
+        });
+    }
+
+    // Start the real-time wait time ticker
+    setInterval(updateAllWaitTimes, 1000);
 
     // Simple real-time Manila clock
     function updateManilaClock() {
@@ -616,7 +716,8 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         slt: '',
         concern: '',
         dept: '',
-        status: 'ALL'
+        status: 'ALL',
+        site: 'ALL'
     };
 
     // --- Search & Advanced Filters Logic ---
@@ -648,6 +749,16 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         attachListener('filterDept', 'dept');
     });
 
+    function setSiteFilter(site) {
+        filterParams.site = site;
+        document.getElementById('btnFilterSiteAll').className = site === 'ALL' ? 'px-4 py-1.5 text-xs font-semibold rounded bg-gray-600 text-white shadow-sm transition-colors' : 'px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors';
+        document.getElementById('btnFilterSiteKawit').className = site === 'KAWIT' ? 'px-4 py-1.5 text-xs font-semibold rounded bg-blue-600 text-white shadow-sm transition-colors' : 'px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors';
+        document.getElementById('btnFilterSiteBacoor').className = site === 'BACOOR' ? 'px-4 py-1.5 text-xs font-semibold rounded bg-red-600 text-white shadow-sm transition-colors' : 'px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors';
+        
+        currentPage = 1;
+        applyAndRender();
+    }
+
     function setStatusFilter(status) {
         filterParams.status = status;
         document.getElementById('btnFilterAll').className = status === 'ALL' ? 'px-4 py-1.5 text-xs font-semibold rounded bg-blue-600 text-white shadow-sm transition-colors' : 'px-4 py-1.5 text-xs font-semibold rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors';
@@ -675,6 +786,7 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         document.getElementById('filterDept').value = ''; filterParams.dept = '';
         document.getElementById('searchInput').value = ''; searchQuery = '';
         clearSearchBtn.classList.add('hidden');
+        setSiteFilter('ALL');
 
         switch(filterType) {
             case 'all':
@@ -709,6 +821,7 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         document.getElementById('searchInput').value = ''; searchQuery = '';
         clearSearchBtn.classList.add('hidden');
         setStatusFilter('ALL');
+        setSiteFilter('ALL');
     }
 
     // --- Image Viewer Logic ---
@@ -939,6 +1052,11 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
             filtered = filtered.filter(t => t.Status.toUpperCase() === filterParams.status);
         }
 
+        // Apply Site Filter
+        if (filterParams.site !== 'ALL') {
+            filtered = filtered.filter(t => (t.Site || '').toUpperCase() === filterParams.site);
+        }
+
         // Apply SLT Filter
         if (filterParams.slt) {
             filtered = filtered.filter(t => t.SLT_on_DUTY === filterParams.slt);
@@ -987,7 +1105,7 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         const tableBody = document.getElementById('ticket-table-body');
         let html = '';
         if (ticketsToRender.length === 0) {
-            html = `<tr><td colspan="11" class="px-6 py-12 text-center">
+            html = `<tr><td colspan="9" class="px-6 py-12 text-center">
                 <div class="flex flex-col items-center justify-center">
                     <svg class="h-12 w-12 text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -998,37 +1116,83 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
         } else {
             ticketsToRender.forEach(ticket => {
                 const isPending = ticket.Status === 'PENDING';
-                const statusBadge = isPending 
-                    ? `<span class="px-3 py-1 inline-flex text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">Pending</span>`
-                    : `<span class="px-3 py-1 inline-flex text-xs font-semibold rounded-full bg-green-500/20 text-green-300 border border-green-500/30">Resolved</span>`;
                 
-                const formattedTimestamp = formatTimestamp(ticket.Timestamp);
+                // NEW: Urgency Underline Logic
+                const urgencyLevel = (ticket.urgency || ticket.Urgency || 'MEDIUM').toUpperCase();
+                let underlineClass = '';
+                let highlightClass = '';
+                
+                if (urgencyLevel === 'HIGH') {
+                    underlineClass = 'border-b-2 border-red-500 pb-0.5 text-red-100 font-semibold';
+                    if (isPending) highlightClass = 'border-l-4 border-red-500 bg-red-900/10';
+                } else if (urgencyLevel === 'MEDIUM') {
+                    underlineClass = 'border-b-2 border-yellow-500 pb-0.5 text-yellow-100';
+                } else {
+                    underlineClass = 'border-b-2 border-blue-500 pb-0.5 text-blue-100';
+                }
+                
+                const statusBadge = isPending 
+                    ? `<span class="px-2 py-1 inline-flex text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">Pending</span>`
+                    : `<span class="px-2 py-1 inline-flex text-xs font-semibold rounded-full bg-green-500/20 text-green-300 border border-green-500/30">Resolved</span>`;
+                
+                // NEW: Wait time calculator setup
+                const waitTimeHtml = calculateWaitTime(ticket.Timestamp, ticket.Status);
+                
+                // FIXED: Site formatting - changed to a compact badge to fit inside the Dept column
+                const siteName = (ticket.Site || 'N/A').toUpperCase();
+                let siteBadgeColor = 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+                if (siteName.includes('KAWIT')) {
+                    siteBadgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+                } else if (siteName.includes('BACOOR')) {
+                    siteBadgeColor = 'bg-red-500/20 text-red-300 border-red-500/30';
+                }
+                
+                const siteBadge = `<span class="inline-flex items-center px-1.5 py-0.5 mt-1 border rounded text-[9px] font-bold shadow-sm ${siteBadgeColor}">
+                    <svg class="w-2.5 h-2.5 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    ${siteName}
+                </span>`;
                 
                 const isActive = ticket.id === currentTicketId;
-                const rowClass = isActive 
+                let rowClass = isActive 
                     ? 'bg-blue-900/30 border-l-4 border-blue-500' 
-                    : 'hover:bg-gray-700/50 border-l-4 border-transparent';
+                    : `hover:bg-gray-700/50 ${highlightClass ? highlightClass : 'border-l-4 border-transparent'}`;
                 
                 const textHighlight = isActive ? 'text-blue-300' : 'text-blue-400 group-hover:text-blue-300';
-                
                 const hideColClass = isPreviewOpen ? 'hidden' : '';
+                
+                // NEW: Quick action resolve button
+                const quickActionBtn = isPending ? `
+                    <button onclick="openQuickResolve(event, ${ticket.id}, '${ticket.Work_Number}', '${ticket.Issues_Concerning.replace(/'/g, "\\'")}')" 
+                            class="ml-3 p-1.5 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded border border-green-500/30 transition-all shadow shadow-green-900/20 opacity-0 group-hover:opacity-100" title="Quick Resolve">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                ` : '';
 
                 html += `
                     <tr class="${rowClass} transition duration-200 cursor-pointer group" onclick="openPreview(${JSON.stringify(ticket).replace(/"/g, '&quot;')})">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${textHighlight}">${ticket.Work_Number}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${ticket.EID}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-200 font-medium">${ticket.Employee_name}</td>
-                        <td class="hide-on-preview ${hideColClass} px-6 py-4 whitespace-nowrap text-sm text-gray-400 transition-all">${ticket.Station_Number}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${ticket.LOB}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">${statusBadge}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300 max-w-[150px] truncate" title="${ticket.Issues_Concerning}">${ticket.Issues_Concerning}</td>
-                        <td class="hide-on-preview ${hideColClass} px-6 py-4 whitespace-nowrap text-sm text-gray-400 transition-all">${ticket.TIME_RECEIVED}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${ticket.SLT_on_DUTY || '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${formattedTimestamp}</td>
-                        <td class="hide-on-preview ${hideColClass} px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500 transition-all">
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium ${textHighlight}">${ticket.Work_Number}</td>
+                        <td class="hide-on-preview ${hideColClass} px-4 py-4 whitespace-nowrap text-sm text-gray-300">${ticket.EID}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-200 font-medium">${ticket.Employee_name}</td>
+                        <td class="px-4 py-4 whitespace-nowrap">
+                            <div class="flex flex-col items-start">
+                                <span class="text-sm text-gray-400">${ticket.LOB}</span>
+                                ${siteBadge}
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm">${statusBadge}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-300 max-w-[150px] truncate" title="${ticket.Issues_Concerning}">
+                            <span class="${underlineClass}">${ticket.Issues_Concerning}</span>
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-mono tracking-tight wait-time-cell" data-timestamp="${ticket.Timestamp}" data-status="${ticket.Status}">${waitTimeHtml}</td>
+                        <td class="hide-on-preview ${hideColClass} px-4 py-4 whitespace-nowrap text-sm text-gray-400">${ticket.SLT_on_DUTY || '-'}</td>
+                        <td class="hide-on-preview ${hideColClass} px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 transition-all flex items-center justify-end h-full min-h-[60px]">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block ${isActive ? 'opacity-100 text-blue-500' : 'opacity-0 group-hover:opacity-100'} transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                             </svg>
+                            ${quickActionBtn}
                         </td>
                     </tr>
                 `;
@@ -1264,7 +1428,7 @@ $monthsWithData = $monthsResult->fetch_all(MYSQLI_ASSOC);
                         <div>
                             <p class="text-[10px] text-gray-500 uppercase">Urgency</p>
                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${ticket.Urgency === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}">
-                                ${ticket.Urgency || 'Normal'}
+                                ${(ticket.urgency || ticket.Urgency || 'Normal').toUpperCase()}
                             </span>
                         </div>
                     </div>

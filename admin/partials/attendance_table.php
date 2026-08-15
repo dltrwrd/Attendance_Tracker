@@ -2,6 +2,11 @@
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
+// Set timezone to Manila for accurate "Today" calculations
+$manilaTimezone = new DateTimeZone('Asia/Manila');
+$manilaDateObj = new DateTime('now', $manilaTimezone);
+$manilaToday = $manilaDateObj->format('Y-m-d');
+
 // Get all filter parameters with proper fallbacks
 $search = isset($_POST['search']) ? trim($_POST['search']) : '';
 $page = isset($_POST['page']) ? (int)$_POST['page'] : (isset($_GET['page']) ? (int)$_GET['page'] : 1);
@@ -28,8 +33,9 @@ if (!isset($perPage)) $perPage = 15;
 // === NEW: Calculate Today's Count for the counter on top right ===
 $todayField = ($type === 'tardiness') ? 'date_of_incident' : ($type === 'vto' ? 'shift_date' : 'date_of_absent');
 try {
-    $todayCountStmt = $pdo->prepare("SELECT COUNT(*) FROM $table WHERE DATE($todayField) = CURDATE()");
-    $todayCountStmt->execute();
+    // Replaced CURDATE() with Manila's current date
+    $todayCountStmt = $pdo->prepare("SELECT COUNT(*) FROM $table WHERE DATE($todayField) = :manila_today");
+    $todayCountStmt->execute([':manila_today' => $manilaToday]);
     $todayCount = $todayCountStmt->fetchColumn();
 } catch (Exception $e) {
     $todayCount = 0;
@@ -64,9 +70,8 @@ if (!empty($cardFilter)) {
             // Only add date filter if not already filtered by date
             if (empty($dateFrom) && empty($dateTo)) {
                 $dateField = ($table === 'tardiness') ? 'date_of_incident' : 'date_of_absent';
-                $todayDate = date('Y-m-d'); // Use PHP's current date
                 $whereClauses[] = "$dateField = :today_date";
-                $params[':today_date'] = $todayDate;
+                $params[':today_date'] = $manilaToday; // Use Manila date
             }
             break;
         }
@@ -93,7 +98,8 @@ elseif (!empty($statusFilter)) {
             $whereClauses[] = "coverage_1 = 'UNCOVERED'";
             // Only add date filter if no date range is specified
             if(empty($dateFrom) && empty($dateTo)) {
-                $whereClauses[] = "date_of_absent = CURDATE()";
+                $whereClauses[] = "date_of_absent = :status_today_date";
+                $params[':status_today_date'] = $manilaToday; // Use Manila date
             }
             break;
     }
@@ -215,7 +221,7 @@ try {
 }
 
 $totalPages = ceil($totalRecords / $perPage);
-$page = min($page, $totalPages);
+$page = min($page, max(1, $totalPages));
 $offset = ($page - 1) * $perPage;
 
 try {
@@ -367,6 +373,7 @@ try {
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">CXI Number</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-48 transition-all">Full Name</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-40 transition-all">Department</th>
+                    
                     <?php if ($type === 'absenteeism'): ?>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Supervisor</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Operations Manager</th>
@@ -400,6 +407,7 @@ try {
                     <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider w-32 transition-all">Actions</th>
                 </tr>
             </thead>
+            
             <tbody class="bg-gray-800 divide-y divide-gray-700">
                 <?php if (empty($records)): ?>
                     <tr>
@@ -548,86 +556,86 @@ try {
                                         <?= htmlspecialchars($record['follow_call_in_procedure']) ?>
                                     </span>
                                 </td>
-<td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
-    <div class="text-sm text-gray-300" 
-        title="<?php
-        // Combine all coverage fields into one display for tooltip
-        $coverageDetails = [];
-        for ($i = 1; $i <= 4; $i++) {
-            $coverageField = "coverage_{$i}";
-            $coverageTypeField = "coverage_type_{$i}";
-            $coverageDetailsField = "coverage_details_{$i}";
-            
-            if (!empty($record[$coverageField])) {
-                $coverageText = htmlspecialchars($record[$coverageField]);
-                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
-                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
-                
-                // Format based on coverage type
-                if ($coverageType === 'PENDING') {
-                    // For PENDING, just show "PENDING" without parentheses
-                    $detail = $coverageText;
-                } else {
-                    $detail = $coverageText;
-                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
-                        $detail .= " ($coverageType";
-                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
-                            $detail .= " - $coverageDetail";
-                        }
-                        $detail .= ")";
-                    }
-                }
-                
-                $coverageDetails[] = $detail;
-            }
-        }
-        
-        if (!empty($coverageDetails)) {
-            echo implode(' | ', $coverageDetails);
-        } else {
-            echo '-';
-        }
-        ?>">
-        <?php
-        // Combine all coverage fields into one display for visible content
-        $coverageDetails = [];
-        for ($i = 1; $i <= 4; $i++) {
-            $coverageField = "coverage_{$i}";
-            $coverageTypeField = "coverage_type_{$i}";
-            $coverageDetailsField = "coverage_details_{$i}";
-            
-            if (!empty($record[$coverageField])) {
-                $coverageText = htmlspecialchars($record[$coverageField]);
-                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
-                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
-                
-                // Format based on coverage type
-                if ($coverageType === 'PENDING') {
-                    // For PENDING, just show "PENDING" without parentheses
-                    $detail = $coverageText;
-                } else {
-                    $detail = $coverageText;
-                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
-                        $detail .= " ($coverageType";
-                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
-                            $detail .= " - $coverageDetail";
-                        }
-                        $detail .= ")";
-                    }
-                }
-                
-                $coverageDetails[] = $detail;
-            }
-        }
-        
-        if (!empty($coverageDetails)) {
-            echo implode('<br>', $coverageDetails);
-        } else {
-            echo '-';
-        }
-        ?>
-    </div>
-</td>
+                                <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
+                                    <div class="text-sm text-gray-300" 
+                                        title="<?php
+                                        // Combine all coverage fields into one display for tooltip
+                                        $coverageDetails = [];
+                                        for ($i = 1; $i <= 4; $i++) {
+                                            $coverageField = "coverage_{$i}";
+                                            $coverageTypeField = "coverage_type_{$i}";
+                                            $coverageDetailsField = "coverage_details_{$i}";
+                                            
+                                            if (!empty($record[$coverageField])) {
+                                                $coverageText = htmlspecialchars($record[$coverageField]);
+                                                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
+                                                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
+                                                
+                                                // Format based on coverage type
+                                                if ($coverageType === 'PENDING') {
+                                                    // For PENDING, just show "PENDING" without parentheses
+                                                    $detail = $coverageText;
+                                                } else {
+                                                    $detail = $coverageText;
+                                                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
+                                                        $detail .= " ($coverageType";
+                                                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
+                                                            $detail .= " - $coverageDetail";
+                                                        }
+                                                        $detail .= ")";
+                                                    }
+                                                }
+                                                
+                                                $coverageDetails[] = $detail;
+                                            }
+                                        }
+                                        
+                                        if (!empty($coverageDetails)) {
+                                            echo implode(' | ', $coverageDetails);
+                                        } else {
+                                            echo '-';
+                                        }
+                                        ?>">
+                                        <?php
+                                        // Combine all coverage fields into one display for visible content
+                                        $coverageDetails = [];
+                                        for ($i = 1; $i <= 4; $i++) {
+                                            $coverageField = "coverage_{$i}";
+                                            $coverageTypeField = "coverage_type_{$i}";
+                                            $coverageDetailsField = "coverage_details_{$i}";
+                                            
+                                            if (!empty($record[$coverageField])) {
+                                                $coverageText = htmlspecialchars($record[$coverageField]);
+                                                $coverageType = htmlspecialchars($record[$coverageTypeField] ?? '');
+                                                $coverageDetail = htmlspecialchars($record[$coverageDetailsField] ?? '');
+                                                
+                                                // Format based on coverage type
+                                                if ($coverageType === 'PENDING') {
+                                                    // For PENDING, just show "PENDING" without parentheses
+                                                    $detail = $coverageText;
+                                                } else {
+                                                    $detail = $coverageText;
+                                                    if (!empty($coverageType) && $coverageType !== '-' && $coverageType !== 'PENDING') {
+                                                        $detail .= " ($coverageType";
+                                                        if (!empty($coverageDetail) && $coverageDetail !== '-') {
+                                                            $detail .= " - $coverageDetail";
+                                                        }
+                                                        $detail .= ")";
+                                                    }
+                                                }
+                                                
+                                                $coverageDetails[] = $detail;
+                                            }
+                                        }
+                                        
+                                        if (!empty($coverageDetails)) {
+                                            echo implode('<br>', $coverageDetails);
+                                        } else {
+                                            echo '-';
+                                        }
+                                        ?>
+                                    </div>
+                                </td>
                                 <td class="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs transition-all">
                                     <div class="text-sm text-gray-300 flex items-center" style="text-transform: uppercase;" title="<?= htmlspecialchars($record['ir_form'] ?? '') ?>">
                                         <?php if (strpos(strtoupper($record['ir_form'] ?? ''), 'FOR IR') !== false): ?>
@@ -787,7 +795,6 @@ try {
     </div>
 </div>
 <?php endif; ?>
-
 
 <div id="historyModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl w-full max-w-md">

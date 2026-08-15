@@ -76,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (isset($_POST['coverage']) && is_array($_POST['coverage'])) {
                 foreach ($_POST['coverage'] as $index => $coverage) {
+                    $coverageEmpId = isset($_POST['coverage_employee_id'][$index]) ? strtoupper(trim(sanitizeInput($_POST['coverage_employee_id'][$index]))) : '';
                     $coverageText = strtoupper(trim(sanitizeInput($coverage)));
                     $coverageType = isset($_POST['coverage_type'][$index]) ? strtoupper(trim(sanitizeInput($_POST['coverage_type'][$index]))) : '-';
                     
@@ -87,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     if (!empty($coverageText)) {
                         $coverageNumber = $index + 1;
+                        $coverageData["coverage_employee_id_{$coverageNumber}"] = $coverageEmpId;
                         $coverageData["coverage_{$coverageNumber}"] = $coverageText;
                         $coverageData["coverage_type_{$coverageNumber}"] = $coverageType;
                         $coverageData["coverage_details_{$coverageNumber}"] = $coverageDetails;
@@ -95,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Fill remaining coverage fields with empty values
                 for ($i = count($_POST['coverage']) + 1; $i <= 4; $i++) {
+                    $coverageData["coverage_employee_id_{$i}"] = '';
                     $coverageData["coverage_{$i}"] = '';
                     $coverageData["coverage_type_{$i}"] = '-';
                     $coverageData["coverage_details_{$i}"] = '';
@@ -180,11 +183,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("A tardiness record already exists for this ". $fullName ." on the selected date " . date('F j, Y', strtotime($dateField)) .".");
             }
             
+            $coverage_employee_id_1 = '';
             $coverage_1 = '';
             $coverage_type_1 = '-';
             $coverage_details_1 = '';
             
             if ($types === 'UNDERTIME' && isset($_POST['coverage']) && is_array($_POST['coverage']) && isset($_POST['coverage'][0])) {
+                $coverage_employee_id_1 = isset($_POST['coverage_employee_id'][0]) ? strtoupper(trim(sanitizeInput($_POST['coverage_employee_id'][0]))) : '';
                 $coverage_1 = strtoupper(trim(sanitizeInput($_POST['coverage'][0])));
                 $coverage_type_1 = isset($_POST['coverage_type'][0]) ? strtoupper(trim(sanitizeInput($_POST['coverage_type'][0]))) : '-';
                 if (isset($_POST['detailed_coverage_type'][0])) {
@@ -206,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'shift' => strtoupper(sanitizeInput($_POST['shift'])),
                 'time_in' => strtoupper(sanitizeInput($_POST['time_in'])),
                 'ir_form' => strtoupper(sanitizeInput($_POST['ir_form'])),
+                'coverage_employee_id_1' => $coverage_employee_id_1,
                 'coverage_1' => $coverage_1,
                 'coverage_type_1' => $coverage_type_1,
                 'coverage_details_1' => $coverage_details_1,
@@ -229,6 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     shift = :shift,
                     time_in = :time_in,
                     ir_form = :ir_form,
+                    coverage_employee_id_1 = :coverage_employee_id_1,
                     coverage_1 = :coverage_1,
                     coverage_type_1 = :coverage_type_1,
                     coverage_details_1 = :coverage_details_1,
@@ -245,10 +252,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Insert new record
                 $stmt = $pdo->prepare("INSERT INTO tardiness 
                     (month, employee_id, full_name, department, supervisor, operation_manager, email, 
-                    date_of_incident, types, minutes_late, shift, time_in, ir_form, coverage_1, coverage_type_1, coverage_details_1, timestamp, sub_name)
+                    date_of_incident, types, minutes_late, shift, time_in, ir_form, coverage_employee_id_1, coverage_1, coverage_type_1, coverage_details_1, timestamp, sub_name)
                     VALUES 
                     (:month, :employee_id, :full_name, :department, :supervisor, :operation_manager, :email, 
-                    :date_of_incident, :types, :minutes_late, :shift, :time_in, :ir_form, :coverage_1, :coverage_type_1, :coverage_details_1, :timestamp, :sub_name)");
+                    :date_of_incident, :types, :minutes_late, :shift, :time_in, :ir_form, :coverage_employee_id_1, :coverage_1, :coverage_type_1, :coverage_details_1, :timestamp, :sub_name)");
                 
                 $stmt->execute($data);
                 $recordId = $pdo->lastInsertId();
@@ -515,12 +522,14 @@ renderSidebar('attendance');
                                         
                                         if ($record) {
                                             for ($i = 1; $i <= 4; $i++) {
+                                                $coverageEmpIdField = "coverage_employee_id_{$i}";
                                                 $coverageField = "coverage_{$i}";
                                                 $coverageTypeField = "coverage_type_{$i}";
                                                 $coverageDetailsField = "coverage_details_{$i}";
                                                 
                                                 if (!empty($record[$coverageField]) || $i === 1) {
                                                     $coverages[] = [
+                                                        'coverage_employee_id' => $record[$coverageEmpIdField] ?? '',
                                                         'coverage' => $record[$coverageField] ?? '',
                                                         'coverage_type' => $record[$coverageTypeField] ?? '-',
                                                         'coverage_details' => $record[$coverageDetailsField] ?? '',
@@ -532,7 +541,7 @@ renderSidebar('attendance');
                                         
                                         // If no existing data, show one empty field
                                         if (empty($coverages)) {
-                                            $coverages = [['coverage' => '', 'coverage_type' => '-', 'coverage_details' => '', 'coverage_number' => 1]];
+                                            $coverages = [['coverage_employee_id' => '', 'coverage' => '', 'coverage_type' => '-', 'coverage_details' => '', 'coverage_number' => 1]];
                                         }
                                         
                                         foreach ($coverages as $index => $coverageData):
@@ -543,11 +552,17 @@ renderSidebar('attendance');
                                         ?>
                                         <div class="coverage-field p-5 border border-gray-600/30 rounded-2xl bg-gray-800/30 shadow-inner relative group transition-all">
                                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                                <div>
+                                                <div class="relative">
+                                                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Employee ID <?= $coverageNumber ?></label>
+                                                    <input type="text" name="coverage_employee_id[]" 
+                                                           class="coverage-emp-input glass-input w-full px-4 py-3 rounded-xl text-sm text-gray-400 bg-gray-900/40 border-gray-700/30 cursor-not-allowed pointer-events-none mb-4" 
+                                                           value="<?= htmlspecialchars($coverageData['coverage_employee_id']) ?>" readonly tabindex="-1" placeholder="Auto-filled">
+                                                    
                                                     <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage <?= $coverageNumber ?></label>
                                                     <textarea name="coverage[]" style="text-transform: uppercase;" rows="2"
-                                                            class="glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
-                                                            required><?= htmlspecialchars($coverageData['coverage']) ?></textarea>
+                                                            class="coverage-search-input glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
+                                                            required autocomplete="off" placeholder="Search employee or type manual coverage..."><?= htmlspecialchars($coverageData['coverage']) ?></textarea>
+                                                    <div class="coverage-search-results hidden absolute z-20 mt-1 w-full max-w-md glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden"></div>
                                                 </div>
                                                 <div>
                                                     <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Type <?= $coverageNumber ?></label>
@@ -677,6 +692,7 @@ renderSidebar('attendance');
                                     </h3>
                                     
                                     <?php
+                                        $coverageEmpId = $record['coverage_employee_id_1'] ?? '';
                                         $coverage = $record['coverage_1'] ?? '';
                                         $coverageType = $record['coverage_type_1'] ?? '-';
                                         $coverageDetails = $record['coverage_details_1'] ?? '';
@@ -686,11 +702,18 @@ renderSidebar('attendance');
                                     ?>
                                     <div class="coverage-field p-5 border border-gray-600/30 rounded-2xl bg-gray-800/30 shadow-inner">
                                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
+                                            <div class="relative">
+                                                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Employee ID 1</label>
+                                                <input type="text" name="coverage_employee_id[]" 
+                                                       class="coverage-emp-input glass-input w-full px-4 py-3 rounded-xl text-sm text-gray-400 bg-gray-900/40 border-gray-700/30 cursor-not-allowed pointer-events-none mb-4" 
+                                                       value="<?= htmlspecialchars($coverageEmpId) ?>" readonly tabindex="-1" placeholder="Auto-filled">
+                                                
                                                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage 1</label>
                                                 <textarea name="coverage[]" style="text-transform: uppercase;" rows="2"
-                                                        class="tardiness-coverage-input glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
+                                                        class="coverage-search-input tardiness-coverage-input glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
+                                                        autocomplete="off" placeholder="Search employee or type manual coverage..."
                                                         <?= ($record && strtoupper($record['types']) === 'UNDERTIME') ? 'required' : '' ?>><?= htmlspecialchars($coverage) ?></textarea>
+                                                <div class="coverage-search-results hidden absolute z-20 mt-1 w-full max-w-md glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden"></div>
                                             </div>
                                             <div>
                                                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Type 1</label>
@@ -978,6 +1001,61 @@ function fetchEmployeeDetails(employeeId) {
         });
 }
 
+function searchCoverageEmployees(query, inputElement) {
+    const resultsContainer = inputElement.closest('.relative').querySelector('.coverage-search-results');
+    
+    if (query.length < 2) {
+        resultsContainer.classList.add('hidden');
+        return;
+    }
+
+    fetch('../api/search_employees.php?query=' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {
+            resultsContainer.innerHTML = '';
+            
+            if (data.success && data.employees.length > 0) {
+                data.employees.forEach(employee => {
+                    const item = document.createElement('div');
+                    item.className = 'px-4 py-3 hover:bg-gray-700/50 cursor-pointer border-b border-gray-700/50 transition-colors';
+                    item.innerHTML = `
+                        <div class="font-bold text-gray-200">${employee.employee_id}</div>
+                        <div class="text-xs text-gray-400 uppercase">${employee.full_name}</div>
+                    `;
+                    item.addEventListener('click', () => {
+                        const hiddenInput = inputElement.closest('.relative').querySelector('.coverage-emp-input');
+                        if (hiddenInput) hiddenInput.value = employee.employee_id;
+                        inputElement.value = employee.full_name;
+                        resultsContainer.classList.add('hidden');
+                    });
+                    resultsContainer.appendChild(item);
+                });
+                resultsContainer.classList.remove('hidden');
+            } else {
+                resultsContainer.classList.add('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+// Add event delegation for dynamically created coverage inputs
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('coverage-search-input')) {
+        searchCoverageEmployees(e.target.value, e.target);
+    }
+});
+
+// Hide coverage search results when clicking outside
+document.addEventListener('click', function(e) {
+    const isCoverageSearchClick = e.target.closest('.coverage-search-results') || e.target.classList.contains('coverage-search-input');
+    if (!isCoverageSearchClick) {
+        document.querySelectorAll('.coverage-search-results').forEach(el => el.classList.add('hidden'));
+    }
+});
+
+
 // Auto-fill employee details if editing
 document.addEventListener('DOMContentLoaded', function() {
     <?php if ($record): ?>
@@ -1003,11 +1081,17 @@ function addCoverageField() {
     newField.className = 'coverage-field p-5 border border-gray-600/30 rounded-2xl bg-gray-800/30 shadow-inner relative group transition-all animate-fade-in mt-4';
     newField.innerHTML = `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div>
+            <div class="relative">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Employee ID ${coverageFieldCount + 1}</label>
+                <input type="text" name="coverage_employee_id[]" 
+                       class="coverage-emp-input glass-input w-full px-4 py-3 rounded-xl text-sm text-gray-400 bg-gray-900/40 border-gray-700/30 cursor-not-allowed pointer-events-none mb-4" 
+                       value="" readonly tabindex="-1" placeholder="Auto-filled">
+                
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage ${coverageFieldCount + 1}</label>
                 <textarea name="coverage[]" style="text-transform: uppercase;" rows="2"
-                          class="glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
-                          required></textarea>
+                          class="coverage-search-input glass-input w-full px-4 py-3 rounded-xl transition-all duration-200 text-sm text-gray-100 custom-scrollbar" 
+                          required autocomplete="off" placeholder="Search employee or type manual coverage..."></textarea>
+                <div class="coverage-search-results hidden absolute z-20 mt-1 w-full max-w-md glass-panel border border-gray-600/50 rounded-xl shadow-2xl overflow-hidden"></div>
             </div>
             <div>
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Coverage Type ${coverageFieldCount + 1}</label>
@@ -1072,15 +1156,18 @@ function updateCoverageLabels() {
     const coverageFields = document.querySelectorAll('.coverage-field');
     coverageFields.forEach((field, index) => {
         const coverageNumber = index + 1;
-        const coverageLabel = field.querySelector('label:first-child');
-        const coverageTypeLabel = field.querySelector('label:nth-child(2)');
+        const labels = field.querySelectorAll('label');
         
-        if (coverageLabel) {
-            coverageLabel.textContent = `Coverage ${coverageNumber}`;
-        }
-        if (coverageTypeLabel) {
-            coverageTypeLabel.textContent = `Coverage Type ${coverageNumber}`;
-        }
+        // Find labels based on text content since they are dynamic
+        labels.forEach(label => {
+            if (label.textContent.includes('Coverage Employee ID')) {
+                label.textContent = `Coverage Employee ID ${coverageNumber}`;
+            } else if (label.textContent.includes('Coverage Type')) {
+                label.textContent = `Coverage Type ${coverageNumber}`;
+            } else if (label.textContent.includes('Coverage')) {
+                label.textContent = `Coverage ${coverageNumber}`;
+            }
+        });
     });
 }
 

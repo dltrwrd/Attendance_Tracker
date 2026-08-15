@@ -285,17 +285,12 @@ function renderHead($title) {
                     transform: translateX(-100%);
                 }
                 
-                #sidebar:hover {
-                    width: 16rem;
+                #sidebar.open {
+                    transform: translateX(0) !important;
                 }
                 
                 .main-content {
-                    margin-left: 0;
-                }
-                
-                #sidebarToggle:hover + #sidebar,
-                #sidebar:hover {
-                    transform: translateX(0);
+                    margin-left: 0 !important;
                 }
                 
                 .sidebar-text {
@@ -342,14 +337,10 @@ function renderNavbar() {
     <nav class="bg-gray-900/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-30 transition-all shadow-sm">
         <div class="px-4 py-3 flex justify-between items-center">
             
-            <!-- Left Layout Anchor (FIXED CLOSING TAG) -->
-            <div class="flex items-center space-x-4" style="opacity:0; width: 5rem;">            
-                <button id="sidebarToggle" class="text-gray-400 hover:text-white focus:outline-none md:hidden">
+            <div class="flex items-center space-x-4 md:opacity-0 md:w-20 pl-2 md:pl-0">            
+                <button id="sidebarToggle" class="text-gray-400 hover:text-white focus:outline-none md:hidden p-2">
                     <i class="fas fa-bars fa-lg"></i>
                 </button>
-                <div class="flex items-center">
-                    <img src="../assets/cxi.png" alt="CXI Logo" class="w-10 h-10 mr-2">
-                </div>
             </div>
 
             <!-- Right side: Voice UI, Notification Bell, Online Users, Profile -->
@@ -447,6 +438,9 @@ function renderNavbar() {
 
 function renderSidebar($activePage = 'dashboard', $pendingCount = 0, $pendingCCTVCount = 0) {
     ?>
+    <!-- Mobile Sidebar Overlay -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 hidden md:hidden"></div>
+    
     <aside id="sidebar" class="fixed h-full z-40">
         <div class="p-4">
             <div class="flex items-center space-x-4">
@@ -905,11 +899,16 @@ function renderFooter() {
 
     <script>
         const sidebarToggleBtn = document.getElementById('sidebarToggle');
-        if (sidebarToggleBtn) {
-            sidebarToggleBtn.addEventListener('click', function() {
-                document.getElementById('sidebar').classList.toggle('-translate-x-full');
-            });
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const sidebar = document.getElementById('sidebar');
+
+        function toggleSidebar() {
+            if (sidebar) sidebar.classList.toggle('open');
+            if (sidebarOverlay) sidebarOverlay.classList.toggle('hidden');
         }
+
+        if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
+        if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 
         let lastOnlineUsersList = [];
         
