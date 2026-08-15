@@ -1,6 +1,6 @@
 function autoNoteAbsent(e) {
   var mainSheetName = "ABSENTEEISM";
-  var triggerColumn = 28; // Column S
+  var triggerColumn = 32; // Column AF
   var triggerValue = "fire";
 
   var range = e.range;
@@ -28,22 +28,23 @@ function checkForFireTriggersAbsent() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("ABSENTEEISM");
-    var triggerColumn = 28; // Column AB
-
     if (!sheet) return;
 
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
-    // Get enough columns to include column AB (index 27)
-    var dataRange = sheet.getRange(1, 1, lastRow, 30); // Increased to 30 columns
+    var triggerColumn = 32; // Column AF (1-based index)
+    var triggerIndex = triggerColumn - 1; // 31 (0-based index for array)
+
+    // Expand the range to 32 columns so Column AF is included
+    var dataRange = sheet.getRange(1, 1, lastRow, triggerColumn);
     var data = dataRange.getValues();
 
     for (var i = 1; i < data.length; i++) {
       var rowNumber = i + 1;
-      var fireValue = data[i][27]; // Column AB is index 27 (0-based) - FIXED
+      var fireValue = data[i][triggerIndex]; // Reads Column AF
 
-      if (fireValue && fireValue.toString().toLowerCase() === "fire") {
+      if (fireValue && fireValue.toString().trim().toLowerCase() === "fire") {
         addNoteToSchedfile(rowNumber);
         sheet.getRange(rowNumber, triggerColumn).clearContent();
       }
@@ -65,14 +66,8 @@ function setupAutoFireTriggerAbsent() {
   // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersAbsent")
     .timeBased()
-    .everyMinutes(1)
+    .everyMinutes(5)
     .create();
-
-  Browser.msgBox(
-    "Success",
-    "Auto-fire trigger setup complete! checkForFireTriggersAbsent will run every 1 minutes.",
-    Browser.Buttons.OK,
-  );
 }
 
 function addNoteToSchedfile(rowNumber) {
@@ -110,18 +105,18 @@ function addNoteToSchedfile(rowNumber) {
   var name = mainSheet.getRange("C" + rowNumber).getValue();
   var dateStrMain = mainSheet.getRange("G" + rowNumber).getDisplayValue();
   var sanction = mainSheet.getRange("I" + rowNumber).getDisplayValue();
-  var originalShift = mainSheet.getRange("W" + rowNumber).getValue();
+  var originalShift = mainSheet.getRange("AA" + rowNumber).getValue();
   var reason = mainSheet.getRange("J" + rowNumber).getValue();
-  var coverage1 = mainSheet.getRange("K" + rowNumber).getValue();
-  var coverageType1 = mainSheet.getRange("L" + rowNumber).getValue();
-  var coverageDetails1 = mainSheet.getRange("M" + rowNumber).getValue(); // Get Column M Coverage Shift/Details
-  var coverage2 = mainSheet.getRange("N" + rowNumber).getValue();
-  var coverageType2 = mainSheet.getRange("O" + rowNumber).getValue();
-  var coverageDetails2 = mainSheet.getRange("P" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
-  var coverage3 = mainSheet.getRange("Q" + rowNumber).getValue();
-  var coverageType3 = mainSheet.getRange("R" + rowNumber).getValue();
-  var coverageDetails3 = mainSheet.getRange("S" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
-  var sltDuty = mainSheet.getRange("Z" + rowNumber).getValue();
+  var coverage1 = mainSheet.getRange("L" + rowNumber).getValue();
+  var coverageType1 = mainSheet.getRange("M" + rowNumber).getValue();
+  var coverageDetails1 = mainSheet.getRange("N" + rowNumber).getValue(); // Get Column M Coverage Shift/Details
+  var coverage2 = mainSheet.getRange("O" + rowNumber).getValue();
+  var coverageType2 = mainSheet.getRange("P" + rowNumber).getValue();
+  var coverageDetails2 = mainSheet.getRange("Q" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
+  var coverage3 = mainSheet.getRange("R" + rowNumber).getValue();
+  var coverageType3 = mainSheet.getRange("S" + rowNumber).getValue();
+  var coverageDetails3 = mainSheet.getRange("T" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
+  var sltDuty = mainSheet.getRange("AD" + rowNumber).getValue();
 
   if (!name || !dateStrMain) {
     Browser.msgBox(

@@ -262,6 +262,7 @@ function addNoteToNotefile(rowNumber) {
 }
 
 // Helper function to write coverage note on covering employee's cell in Schedfile
+
 function addCoverageNote(
   schedfileSheet,
   headerDates,
