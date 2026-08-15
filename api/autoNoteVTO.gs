@@ -196,6 +196,8 @@ function addNoteToNotefile(rowNumber) {
   }
 
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
+  var vtoAgentColor = targetCell.getBackground(); // capture BEFORE overwrite, used to color the coverer's cell
+
   var comment =
     "VTO Type: " +
     VTOType +
@@ -221,7 +223,15 @@ function addNoteToNotefile(rowNumber) {
     "\n" +
     sltDuty;
 
-  targetCell.setNote(comment);
+  var existingNote = targetCell.getNote();
+  if (existingNote && existingNote.trim() !== "") {
+    // Append instead of overwrite so a late/undertime note written earlier isn't wiped out
+    if (existingNote.indexOf(comment.trim()) === -1) {
+      targetCell.setNote(existingNote.trim() + "\n\n" + comment);
+    }
+  } else {
+    targetCell.setNote(comment);
+  }
   // Set cell value based on MinsWorked
   if (MinsWorked === 0) {
     targetCell.setValue("VTO - WD");
@@ -243,6 +253,7 @@ function addNoteToNotefile(rowNumber) {
       "",
       sltDuty,
       "VTO",
+      vtoAgentColor,
     );
   }
 
@@ -274,6 +285,7 @@ function addCoverageNote(
   coverageDetails,
   sltDuty,
   statusType,
+  vtoAgentColor,
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
@@ -384,6 +396,20 @@ function addCoverageNote(
   coveringOriginalShift = coveringOriginalShift
     ? coveringOriginalShift.toString().trim()
     : "";
+  var coverCellWasBlank = !coveringOriginalShift;
+
+  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). Fall back to the
+  // time typed alongside their name in the coverage field, and if even that's missing, just
+  // copy the VTO'd employee's shift as a single line.
+  var usedFallbackShift = false;
+  if (!coveringOriginalShift) {
+    if (coverageShift) {
+      coveringOriginalShift = coverageShift;
+    } else if (originalShift) {
+      coveringOriginalShift = originalShift.toString().trim();
+      usedFallbackShift = true;
+    }
+  }
 
   var comment = "";
   if (statusType === "VTO") {
@@ -429,6 +455,32 @@ function addCoverageNote(
         "\n" +
         sltDuty;
     }
+  }
+
+  // Stack the coverer's own shift and the covered shift into the cell value, earlier start
+  // time on top. Reuses parseStartMinutes from autoNoteAbsent.gs (same GAS project, shared
+  // global scope). Skips stacking (single line) when we had nothing distinct for the coverer.
+  var stackedValue;
+  if (usedFallbackShift) {
+    stackedValue = originalShift;
+  } else {
+    var ownStart = parseStartMinutes(coveringOriginalShift);
+    var coveredStart = parseStartMinutes(originalShift);
+    if (ownStart !== -1 && coveredStart !== -1 && coveredStart < ownStart) {
+      stackedValue = originalShift + "\n" + coveringOriginalShift;
+    } else {
+      stackedValue = coveringOriginalShift + "\n" + originalShift;
+    }
+  }
+  targetCell.setValue(stackedValue);
+
+  // DSOT: coverer works their own regular shift elsewhere, so skip copying the VTO'd
+  // employee's color -- UNLESS the coverer had no plotted schedule of their own (blank cell,
+  // e.g. RDOT/DSOT day), in which case still copy it same as other statuses.
+  var isDSOT =
+    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+  if (vtoAgentColor && (!isDSOT || coverCellWasBlank)) {
+    targetCell.setBackground(vtoAgentColor);
   }
 
   var existingNote = targetCell.getNote();
