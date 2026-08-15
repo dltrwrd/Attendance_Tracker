@@ -110,12 +110,12 @@ function addNoteToSchedfile(rowNumber) {
   var coverage1 = mainSheet.getRange("L" + rowNumber).getValue();
   var coverageType1 = mainSheet.getRange("M" + rowNumber).getValue();
   var coverageDetails1 = mainSheet.getRange("N" + rowNumber).getValue(); // Get Column M Coverage Shift/Details
-  var coverage2 = mainSheet.getRange("O" + rowNumber).getValue();
-  var coverageType2 = mainSheet.getRange("P" + rowNumber).getValue();
-  var coverageDetails2 = mainSheet.getRange("Q" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
-  var coverage3 = mainSheet.getRange("R" + rowNumber).getValue();
-  var coverageType3 = mainSheet.getRange("S" + rowNumber).getValue();
-  var coverageDetails3 = mainSheet.getRange("T" + rowNumber).getValue(); // Get Column P Coverage Shift/Details
+  var coverage2 = mainSheet.getRange("P" + rowNumber).getValue();
+  var coverageType2 = mainSheet.getRange("Q" + rowNumber).getValue();
+  var coverageDetails2 = mainSheet.getRange("R" + rowNumber).getValue();
+  var coverage3 = mainSheet.getRange("T" + rowNumber).getValue();
+  var coverageType3 = mainSheet.getRange("U" + rowNumber).getValue();
+  var coverageDetails3 = mainSheet.getRange("V" + rowNumber).getValue();
   var sltDuty = mainSheet.getRange("AD" + rowNumber).getValue();
 
   if (!name || !dateStrMain) {
@@ -465,11 +465,25 @@ function addAbsentCoverageNote(
     : "";
   var coverCellWasBlank = !coveringOriginalShift;
 
-  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). Fall back to the
-  // time typed alongside their name in the coverage field (e.g. "Juan (1:00 PM - 10:00 PM)"),
-  // and if even that's missing, just copy the absent employee's shift as a single line.
+  var isDSOT =
+    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+
+  // DSOT: the time typed alongside the coverer's name (e.g. "Juan (11:00 PM - 3:00 AM)") is
+  // the SPECIFIC SEGMENT of the absent employee's shift this coverer is handling -- not the
+  // coverer's own shift (matters when multiple coverers split one absent shift). Falls back
+  // to the absent employee's full shift when no segment was typed.
+  var dsotCoverageShift = coverageShift
+    ? coverageShift
+    : originalShift
+      ? originalShift.toString().trim()
+      : "";
+
+  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). For non-DSOT, fall
+  // back to the time typed alongside their name (e.g. "Juan (1:00 PM - 10:00 PM)"), and if
+  // even that's missing, copy the absent employee's shift as a single line. For DSOT, leave
+  // it blank -- the typed time is the coverage segment (above), not their own shift.
   var usedFallbackShift = false;
-  if (!coveringOriginalShift) {
+  if (!coveringOriginalShift && !isDSOT) {
     if (coverageShift) {
       coveringOriginalShift = coverageShift;
     } else if (originalShift) {
@@ -479,7 +493,23 @@ function addAbsentCoverageNote(
   }
 
   var comment = "";
-  if (statusType === "VTO") {
+  if (isDSOT) {
+    comment =
+      "COVERAGE: " +
+      absentEmployeeName +
+      " (" +
+      statusType +
+      ")" +
+      "\nORIGINAL SHIFT: " +
+      coveringOriginalShift +
+      "\nCOVERAGE SHIFT: " +
+      dsotCoverageShift +
+      "\nCOVERAGE TYPE: " +
+      coverageType +
+      "\n" +
+      "\n" +
+      sltDuty;
+  } else if (statusType === "VTO") {
     comment =
       "COVERAGE: " +
       absentEmployeeName +
@@ -530,7 +560,19 @@ function addAbsentCoverageNote(
   // When we had nothing distinct for the coverer (usedFallbackShift), don't duplicate the
   // absent employee's shift on both lines -- just show it once.
   var stackedValue;
-  if (usedFallbackShift) {
+  if (isDSOT) {
+    if (!coveringOriginalShift) {
+      stackedValue = dsotCoverageShift;
+    } else {
+      var dsotOwnStart = parseStartMinutes(coveringOriginalShift);
+      var dsotCoveredStart = parseStartMinutes(dsotCoverageShift);
+      if (dsotOwnStart !== -1 && dsotCoveredStart !== -1 && dsotCoveredStart < dsotOwnStart) {
+        stackedValue = dsotCoverageShift + "\n" + coveringOriginalShift;
+      } else {
+        stackedValue = coveringOriginalShift + "\n" + dsotCoverageShift;
+      }
+    }
+  } else if (usedFallbackShift) {
     stackedValue = originalShift;
   } else {
     var ownStart = parseStartMinutes(coveringOriginalShift);
@@ -546,8 +588,6 @@ function addAbsentCoverageNote(
   // DSOT: coverer works their own regular shift elsewhere, so skip copying the absent
   // employee's color -- UNLESS the coverer had no plotted schedule of their own (blank cell,
   // e.g. RDOT/DSOT day), in which case still copy it same as other statuses.
-  var isDSOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
   if (agent1Color && (!isDSOT || coverCellWasBlank)) {
     targetCell.setBackground(agent1Color);
   }

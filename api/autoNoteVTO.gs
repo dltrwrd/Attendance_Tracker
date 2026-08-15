@@ -398,11 +398,25 @@ function addCoverageNote(
     : "";
   var coverCellWasBlank = !coveringOriginalShift;
 
-  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). Fall back to the
-  // time typed alongside their name in the coverage field, and if even that's missing, just
-  // copy the VTO'd employee's shift as a single line.
+  var isDSOT =
+    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+
+  // DSOT: the time typed alongside the coverer's name (e.g. "Juan (11:00 PM - 3:00 AM)") is
+  // the SPECIFIC SEGMENT of the VTO'd employee's shift this coverer is handling -- not the
+  // coverer's own shift (matters when multiple coverers split one shift). Falls back to the
+  // VTO'd employee's full shift when no segment was typed.
+  var dsotCoverageShift = coverageShift
+    ? coverageShift
+    : originalShift
+      ? originalShift.toString().trim()
+      : "";
+
+  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). For non-DSOT, fall
+  // back to the time typed alongside their name, and if even that's missing, copy the VTO'd
+  // employee's shift as a single line. For DSOT, leave it blank -- the typed time is the
+  // coverage segment (above), not their own shift.
   var usedFallbackShift = false;
-  if (!coveringOriginalShift) {
+  if (!coveringOriginalShift && !isDSOT) {
     if (coverageShift) {
       coveringOriginalShift = coverageShift;
     } else if (originalShift) {
@@ -412,7 +426,23 @@ function addCoverageNote(
   }
 
   var comment = "";
-  if (statusType === "VTO") {
+  if (isDSOT) {
+    comment =
+      "COVERAGE: " +
+      absentEmployeeName +
+      " (" +
+      statusType +
+      ")" +
+      "\nORIGINAL SHIFT: " +
+      coveringOriginalShift +
+      "\nCOVERAGE SHIFT: " +
+      dsotCoverageShift +
+      "\nCOVERAGE TYPE: " +
+      coverageType +
+      "\n" +
+      "\n" +
+      sltDuty;
+  } else if (statusType === "VTO") {
     comment =
       "COVERAGE: " +
       absentEmployeeName +
@@ -461,7 +491,23 @@ function addCoverageNote(
   // time on top. Reuses parseStartMinutes from autoNoteAbsent.gs (same GAS project, shared
   // global scope). Skips stacking (single line) when we had nothing distinct for the coverer.
   var stackedValue;
-  if (usedFallbackShift) {
+  if (isDSOT) {
+    if (!coveringOriginalShift) {
+      stackedValue = dsotCoverageShift;
+    } else {
+      var dsotOwnStart = parseStartMinutes(coveringOriginalShift);
+      var dsotCoveredStart = parseStartMinutes(dsotCoverageShift);
+      if (dsotOwnStart !== -1 && dsotCoveredStart !== -1 && dsotCoveredStart < dsotOwnStart) {
+        stackedValue = dsotCoverageShift + "\n" + coveringOriginalShift;
+      } else {
+        stackedValue = coveringOriginalShift + "\n" + dsotCoverageShift;
+      }
+    }
+  } else if (statusType === "VTO") {
+    // VTO coverer is a straight backup taking over the exact same shift, not working an
+    // additional/different one -- just copy the VTO'd employee's shift, no stacking.
+    stackedValue = originalShift;
+  } else if (usedFallbackShift) {
     stackedValue = originalShift;
   } else {
     var ownStart = parseStartMinutes(coveringOriginalShift);
@@ -477,8 +523,6 @@ function addCoverageNote(
   // DSOT: coverer works their own regular shift elsewhere, so skip copying the VTO'd
   // employee's color -- UNLESS the coverer had no plotted schedule of their own (blank cell,
   // e.g. RDOT/DSOT day), in which case still copy it same as other statuses.
-  var isDSOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
   if (vtoAgentColor && (!isDSOT || coverCellWasBlank)) {
     targetCell.setBackground(vtoAgentColor);
   }
