@@ -196,18 +196,20 @@ function addNoteToNotefile(rowNumber) {
   }
 
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
-  var vtoAgentColor = targetCell.getBackground(); // capture BEFORE overwrite, used to color the coverer's cell
+  var vtoAgentCell = targetCell; // live Range, used to paste-format-only onto the coverer's cell
 
-  // Re-fire guard: if this row was already fired before, the cell is already our own cyan
-  // "VTO" marker, not the true original color. Don't propagate that to coverers -- null it
-  // out so the color step is skipped for them (notes/values still update normally on re-fire).
+  // Re-fire guard: if this row was already fired before, this cell's current format is our
+  // own cyan "VTO" marker, not the true original. Don't propagate that to coverers -- null it
+  // out so the format step is skipped for them (notes/values still update normally on
+  // re-fire). Safe to do full-format copyTo now (not just background) since this cell's own
+  // overwrite is deferred until after the coverer is processed, below.
   var existingValue = targetCell.getValue();
   if (
     existingValue === "VTO" ||
     existingValue === "VTO - WD" ||
-    vtoAgentColor.toUpperCase() === "#00FFFF"
+    targetCell.getBackground().toUpperCase() === "#00FFFF"
   ) {
-    vtoAgentColor = null;
+    vtoAgentCell = null;
   }
 
   var comment =
@@ -253,7 +255,7 @@ function addNoteToNotefile(rowNumber) {
       "",
       sltDuty,
       "VTO",
-      vtoAgentColor,
+      vtoAgentCell,
     );
   }
 
@@ -304,7 +306,7 @@ function addCoverageNote(
   coverageDetails,
   sltDuty,
   statusType,
-  vtoAgentColor,
+  vtoAgentCell,
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
@@ -533,10 +535,11 @@ function addCoverageNote(
     targetCell.setValue(stackedValue);
   }
 
-  // DSOT: skip the color copy (coverer works their own shift elsewhere) unless their cell
-  // was blank to begin with.
-  if (vtoAgentColor && (!isDSOT || coverCellWasBlank)) {
-    targetCell.setBackground(vtoAgentColor);
+  // DSOT: skip the format copy (coverer works their own shift elsewhere) unless their cell
+  // was blank to begin with. Full paste-format-only (background, font family/size/weight/
+  // style/color, alignment, borders, number format) via copyTo, like Ctrl+Alt+V.
+  if (vtoAgentCell && (!isDSOT || coverCellWasBlank)) {
+    vtoAgentCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   }
 
   var existingNote = targetCell.getNote();

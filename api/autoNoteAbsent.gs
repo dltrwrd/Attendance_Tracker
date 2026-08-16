@@ -199,13 +199,18 @@ function addNoteToSchedfile(rowNumber) {
   }
 
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
-  var agent1Color = targetCell.getBackground(); // capture BEFORE overwrite, used to color the coverer's cell
+  var agent1Cell = targetCell; // live Range, used to paste-format-only onto the coverer's cell
 
-  // Re-fire guard: if this row was already fired before, the cell is already our own red
-  // "ABSENT" marker, not the true original color. Don't propagate that to coverers -- null it
-  // out so the color step is skipped for them (notes/values still update normally on re-fire).
-  if (targetCell.getValue() === "ABSENT" || agent1Color.toUpperCase() === "#FF0000") {
-    agent1Color = null;
+  // Re-fire guard: if this row was already fired before, this cell's current format is our
+  // own red "ABSENT" marker, not the true original. Don't propagate that to coverers -- null
+  // it out so the format step is skipped for them (notes/values still update normally on
+  // re-fire). Safe to do full-format copyTo now (not just background) since Agent1's own
+  // overwrite is deferred until after all coverers are processed, below.
+  if (
+    targetCell.getValue() === "ABSENT" ||
+    targetCell.getBackground().toUpperCase() === "#FF0000"
+  ) {
+    agent1Cell = null;
   }
 
   var comment =
@@ -300,7 +305,7 @@ function addNoteToSchedfile(rowNumber) {
         mergedShift,
         sltDuty,
         "ABSENT",
-        agent1Color,
+        agent1Cell,
       );
     } else {
       // Different people or only one coverage person
@@ -315,7 +320,7 @@ function addNoteToSchedfile(rowNumber) {
         coverageDetails1,
         sltDuty,
         "ABSENT",
-        agent1Color,
+        agent1Cell,
       );
       if (
         coverage2 &&
@@ -333,7 +338,7 @@ function addNoteToSchedfile(rowNumber) {
           coverageDetails2,
           sltDuty,
           "ABSENT",
-          agent1Color,
+          agent1Cell,
         );
       }
       if (
@@ -352,7 +357,7 @@ function addNoteToSchedfile(rowNumber) {
           coverageDetails3,
           sltDuty,
           "ABSENT",
-          agent1Color,
+          agent1Cell,
         );
       }
       if (
@@ -371,7 +376,7 @@ function addNoteToSchedfile(rowNumber) {
           coverageDetails4,
           sltDuty,
           "ABSENT",
-          agent1Color,
+          agent1Cell,
         );
       }
     }
@@ -448,7 +453,7 @@ function addAbsentCoverageNote(
   coverageDetails,
   sltDuty,
   statusType,
-  agent1Color,
+  agent1Cell,
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
@@ -664,10 +669,11 @@ function addAbsentCoverageNote(
     targetCell.setValue(stackedValue);
   }
 
-  // DSOT: skip the color copy (coverer works their own shift elsewhere) unless their cell
-  // was blank to begin with.
-  if (agent1Color && (!isDSOT || coverCellWasBlank)) {
-    targetCell.setBackground(agent1Color);
+  // DSOT: skip the format copy (coverer works their own shift elsewhere) unless their cell
+  // was blank to begin with. Full paste-format-only (background, font family/size/weight/
+  // style/color, alignment, borders, number format) via copyTo, like Ctrl+Alt+V.
+  if (agent1Cell && (!isDSOT || coverCellWasBlank)) {
+    agent1Cell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   }
 
   var existingNote = targetCell.getNote();
