@@ -247,7 +247,7 @@ function addNoteToSchedfile(rowNumber) {
         .trim()
     : "";
 
-  if (cleanCovName1 && cleanCovName1 !== "") {
+  if (cleanCovName1 && cleanCovName1 !== "" && !isNoRealCoverer(coverage1)) {
     if (
       cleanCovName2 &&
       cleanCovName2 !== "" &&
@@ -306,7 +306,11 @@ function addNoteToSchedfile(rowNumber) {
         "ABSENT",
         agent1Color,
       );
-      if (coverage2 && coverage2.toString().trim() !== "") {
+      if (
+        coverage2 &&
+        coverage2.toString().trim() !== "" &&
+        !isNoRealCoverer(coverage2)
+      ) {
         addAbsentCoverageNote(
           schedfileSheet,
           headerDates,
@@ -325,7 +329,15 @@ function addNoteToSchedfile(rowNumber) {
   }
 }
 
-// Parses the first HH:MM AM/PM occurrence in a shift string into minutes-since-midnight. Returns -1 if unparseable (e.g. status text like "RDOT").
+// True when a coverage field is a placeholder note (e.g. "TAGGED AS (BACK UP)", "NO NEED
+// (TRAINEE)") instead of an actual coverer's name -- nothing to look up or note for these.
+function isNoRealCoverer(text) {
+  if (!text) return true;
+  var upper = text.toString().trim().toUpperCase();
+  return upper.indexOf("NO NEED") === 0 || upper.indexOf("TAGGED AS") === 0;
+}
+
+// Shift string -> minutes-since-midnight of its first HH:MM AM/PM, or -1 if unparseable (e.g. "RDOT").
 function parseStartMinutes(str) {
   if (!str) return -1;
   var match = str
@@ -340,12 +352,9 @@ function parseStartMinutes(str) {
   return hour * 60 + minute;
 }
 
-// Builds the cell's stacked shift display from whatever RAW text is currently in the cell plus
-// one new shift line, deduped (exact match) and sorted chronologically by start time.
-// Unparseable lines (RDOT/DSOT/status text) sort after parseable ones, keeping their order.
-// Using the RAW cell text (not a previously-fallback-substituted value) here is what prevents
-// re-stacking an already-stacked cell as if it were a single "own shift" on repeat fires --
-// that's what caused unbounded line growth before this helper existed.
+// Adds newShiftText to rawCellText's lines, deduped and sorted by start time (unparseable
+// lines like "RDOT" sort last). Must take the RAW cell text, not a fallback-substituted
+// value, or repeat fires re-stack an already-stacked cell and grow it forever.
 function stackShiftLines(rawCellText, newShiftText) {
   var lines = rawCellText
     ? rawCellText
@@ -373,7 +382,7 @@ function stackShiftLines(rawCellText, newShiftText) {
   return lines.join("\n");
 }
 
-// Helper function to write coverage note + stacked shift value + color on covering employee's cell in Schedfile
+// Writes coverage note + shift value + color on the coverer's cell in Schedfile.
 function addAbsentCoverageNote(
   schedfileSheet,
   headerDates,
@@ -421,7 +430,7 @@ function addAbsentCoverageNote(
     return;
   }
 
-  // 1. Extract time range (e.g. "12:00 AM - 5:00 AM" or "11PM - 3AM") from coveringName or coverageDetails if available
+  // 1. Extract time range (e.g. "12:00 AM - 5:00 AM") from coveringName or coverageDetails
   var timeRegex =
     /\b\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)/i;
   var coverageShift = "";
@@ -491,11 +500,8 @@ function addAbsentCoverageNote(
 
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
 
-  // 4. Get original shift of the covering employee (read from their cell before we overwrite/modify anything)
-  // Keep rawCellText untouched (used later for stacking) -- coveringOriginalShift below may get
-  // fallback-substituted for note-display purposes, and stacking must never treat an already-
-  // stacked multi-line cell as if it were a single "own shift" (that caused unbounded growth
-  // on repeat fires).
+  // 4. Coverer's own shift, read before we touch their cell. rawCellText stays untouched for
+  // stacking; coveringOriginalShift may get fallback-substituted below (note-display only).
   var rawCellText = targetCell.getValue();
   rawCellText = rawCellText ? rawCellText.toString().trim() : "";
   var coveringOriginalShift = rawCellText;
@@ -504,20 +510,23 @@ function addAbsentCoverageNote(
   var isDSOT =
     coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
 
-  // DSOT: the time typed alongside the coverer's name (e.g. "Juan (11:00 PM - 3:00 AM)") is
-  // the SPECIFIC SEGMENT of the absent employee's shift this coverer is handling -- not the
-  // coverer's own shift (matters when multiple coverers split one absent shift). Falls back
-  // to the absent employee's full shift when no segment was typed.
+  // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
+  var isBackupOrAgentMode =
+    coverageType &&
+    (coverageType.toString().toUpperCase().indexOf("BACKUP") !== -1 ||
+      coverageType.toString().toUpperCase().indexOf("AGENT MODE") !== -1);
+
+  // DSOT: the typed time (e.g. "Juan (11:00 PM - 3:00 AM)") is the SEGMENT of the absent
+  // employee's shift this coverer handles, not their own shift -- matters when multiple
+  // coverers split one shift. Falls back to the absent employee's full shift if untyped.
   var dsotCoverageShift = coverageShift
     ? coverageShift
     : originalShift
       ? originalShift.toString().trim()
       : "";
 
-  // Coverer's schedule cell is blank (e.g. they're on RDOT/DSOT that day). For non-DSOT, fall
-  // back to the time typed alongside their name (e.g. "Juan (1:00 PM - 10:00 PM)"), and if
-  // even that's missing, copy the absent employee's shift as a single line. For DSOT, leave
-  // it blank -- the typed time is the coverage segment (above), not their own shift.
+  // Blank cell (e.g. RDOT/DSOT day): non-DSOT falls back to a typed time, then to copying the
+  // absent employee's shift. DSOT stays blank -- the typed time is the segment above, not this.
   if (!coveringOriginalShift && !isDSOT) {
     if (coverageShift) {
       coveringOriginalShift = coverageShift;
@@ -588,21 +597,20 @@ function addAbsentCoverageNote(
     }
   }
 
-  // Add this coverage's shift line to whatever's already in the cell (own shift, prior
-  // coverage lines, or blank), deduped and sorted chronologically. Uses rawCellText (the
-  // untouched read from step 4), never coveringOriginalShift, to avoid re-stacking an
-  // already-stacked cell as if it were a single line on repeat fires.
-  var shiftToAdd = isDSOT
-    ? dsotCoverageShift
-    : originalShift
-      ? originalShift.toString().trim()
-      : "";
-  var stackedValue = stackShiftLines(rawCellText, shiftToAdd);
-  targetCell.setValue(stackedValue);
+  // Stack this shift onto rawCellText (never coveringOriginalShift, to avoid re-stacking an
+  // already-stacked cell). Skipped for BACKUP/AGENT MODE -- value stays as-is.
+  if (!isBackupOrAgentMode) {
+    var shiftToAdd = isDSOT
+      ? dsotCoverageShift
+      : originalShift
+        ? originalShift.toString().trim()
+        : "";
+    var stackedValue = stackShiftLines(rawCellText, shiftToAdd);
+    targetCell.setValue(stackedValue);
+  }
 
-  // DSOT: coverer works their own regular shift elsewhere, so skip copying the absent
-  // employee's color -- UNLESS the coverer had no plotted schedule of their own (blank cell,
-  // e.g. RDOT/DSOT day), in which case still copy it same as other statuses.
+  // DSOT: skip the color copy (coverer works their own shift elsewhere) unless their cell
+  // was blank to begin with.
   if (agent1Color && (!isDSOT || coverCellWasBlank)) {
     targetCell.setBackground(agent1Color);
   }
@@ -620,7 +628,7 @@ function addAbsentCoverageNote(
   }
 }
 
-// Function to normalize names for safe comparison (ignores double spaces, capitalization, and trailing whitespace)
+// Normalizes a name for comparison (case, spacing, trailing whitespace).
 function cleanName(str) {
   if (!str) return "";
   return str.toString().toLowerCase().replace(/\s+/g, " ").trim();
