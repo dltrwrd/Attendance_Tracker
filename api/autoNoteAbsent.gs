@@ -116,6 +116,9 @@ function addNoteToSchedfile(rowNumber) {
   var coverage3 = mainSheet.getRange("T" + rowNumber).getValue();
   var coverageType3 = mainSheet.getRange("U" + rowNumber).getValue();
   var coverageDetails3 = mainSheet.getRange("V" + rowNumber).getValue();
+  var coverage4 = mainSheet.getRange("X" + rowNumber).getValue();
+  var coverageType4 = mainSheet.getRange("Y" + rowNumber).getValue();
+  var coverageDetails4 = mainSheet.getRange("Z" + rowNumber).getValue();
   var sltDuty = mainSheet.getRange("AD" + rowNumber).getValue();
 
   if (!name || !dateStrMain) {
@@ -212,18 +215,24 @@ function addNoteToSchedfile(rowNumber) {
     coverage2 +
     " " +
     coverage3 +
+    "  " +
+    coverage4 +
     "\nCoverage Type: " +
     coverageType1 +
     "  " +
     coverageType2 +
     "  " +
-    coverageType2 +
+    coverageType3 +
+    "  " +
+    coverageType4 +
     "\nCoverage Details: " +
     coverageDetails1 +
     "  " +
     coverageDetails2 +
     "  " +
     coverageDetails3 +
+    "  " +
+    coverageDetails4 +
     "\n" +
     "\n" +
     sltDuty;
@@ -344,6 +353,25 @@ function addNoteToSchedfile(rowNumber) {
           agent1Color,
         );
       }
+      if (
+        coverage4 &&
+        coverage4.toString().trim() !== "" &&
+        !isNoRealCoverer(coverage4)
+      ) {
+        addAbsentCoverageNote(
+          schedfileSheet,
+          headerDates,
+          mainDate,
+          name,
+          originalShift,
+          coverage4,
+          coverageType4,
+          coverageDetails4,
+          sltDuty,
+          "ABSENT",
+          agent1Color,
+        );
+      }
     }
   }
 }
@@ -359,9 +387,7 @@ function isNoRealCoverer(text) {
 // Shift string -> minutes-since-midnight of its first HH:MM AM/PM, or -1 if unparseable (e.g. "RDOT").
 function parseStartMinutes(str) {
   if (!str) return -1;
-  var match = str
-    .toString()
-    .match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)/i);
+  var match = str.toString().match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)/i);
   if (!match) return -1;
   var hour = parseInt(match[1], 10);
   var minute = match[2] ? parseInt(match[2], 10) : 0;
@@ -527,7 +553,8 @@ function addAbsentCoverageNote(
   var coverCellWasBlank = !coveringOriginalShift;
 
   var isDSOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+    coverageType &&
+    coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
 
   // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
   var isBackupOrAgentMode =
