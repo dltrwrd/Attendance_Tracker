@@ -325,6 +325,25 @@ function addNoteToSchedfile(rowNumber) {
           agent1Color,
         );
       }
+      if (
+        coverage3 &&
+        coverage3.toString().trim() !== "" &&
+        !isNoRealCoverer(coverage3)
+      ) {
+        addAbsentCoverageNote(
+          schedfileSheet,
+          headerDates,
+          mainDate,
+          name,
+          originalShift,
+          coverage3,
+          coverageType3,
+          coverageDetails3,
+          sltDuty,
+          "ABSENT",
+          agent1Color,
+        );
+      }
     }
   }
 }
