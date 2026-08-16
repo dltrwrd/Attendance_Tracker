@@ -392,10 +392,13 @@ function addCoverageNote(
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
 
   // 4. Get original shift of the covering employee (read from their cell before we overwrite/modify anything)
-  var coveringOriginalShift = targetCell.getValue();
-  coveringOriginalShift = coveringOriginalShift
-    ? coveringOriginalShift.toString().trim()
-    : "";
+  // Keep rawCellText untouched (used later for DSOT stacking) -- coveringOriginalShift below
+  // may get fallback-substituted for note-display purposes, and stacking must never treat an
+  // already-stacked multi-line cell as if it were a single "own shift" (that caused unbounded
+  // line growth on repeat fires).
+  var rawCellText = targetCell.getValue();
+  rawCellText = rawCellText ? rawCellText.toString().trim() : "";
+  var coveringOriginalShift = rawCellText;
   var coverCellWasBlank = !coveringOriginalShift;
 
   var isDSOT =
@@ -487,22 +490,13 @@ function addCoverageNote(
     }
   }
 
-  // Stack the coverer's own shift and the covered shift into the cell value, earlier start
-  // time on top. Reuses parseStartMinutes from autoNoteAbsent.gs (same GAS project, shared
-  // global scope). Skips stacking (single line) when we had nothing distinct for the coverer.
+  // Add this coverage's shift line to whatever's already in the cell, deduped and sorted
+  // chronologically. Reuses stackShiftLines/parseStartMinutes from autoNoteAbsent.gs (same GAS
+  // project, shared global scope). Uses rawCellText (step 4's untouched read), not
+  // coveringOriginalShift, to avoid re-stacking an already-stacked cell on repeat fires.
   var stackedValue;
   if (isDSOT) {
-    if (!coveringOriginalShift) {
-      stackedValue = dsotCoverageShift;
-    } else {
-      var dsotOwnStart = parseStartMinutes(coveringOriginalShift);
-      var dsotCoveredStart = parseStartMinutes(dsotCoverageShift);
-      if (dsotOwnStart !== -1 && dsotCoveredStart !== -1 && dsotCoveredStart < dsotOwnStart) {
-        stackedValue = dsotCoverageShift + "\n" + coveringOriginalShift;
-      } else {
-        stackedValue = coveringOriginalShift + "\n" + dsotCoverageShift;
-      }
-    }
+    stackedValue = stackShiftLines(rawCellText, dsotCoverageShift);
   } else if (statusType === "VTO") {
     // VTO coverer is a straight backup taking over the exact same shift, not working an
     // additional/different one -- just copy the VTO'd employee's shift, no stacking.

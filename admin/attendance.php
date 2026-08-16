@@ -1882,10 +1882,12 @@ function autoResetFireTrigger(recordId, recordType) {
     }, 90000); 
 }
 
-function fireEmployee(recordId, recordType) {
+function fireEmployee(recordId, recordType, alreadyFired, firedLabel) {
     showConfirmationModal(
-        'Fire Employee',
-        'Do you want to fire this record?',
+        alreadyFired ? 'Already Fired' : 'Fire Employee',
+        alreadyFired
+            ? `This record was already fired on ${firedLabel}. Fire again anyway?`
+            : 'Do you want to fire this record?',
         function() {
             autoResetFireTrigger(recordId, recordType);
             const urlParams = new URLSearchParams(window.location.search);
@@ -1894,7 +1896,7 @@ function fireEmployee(recordId, recordType) {
             window.location.href = `${window.location.pathname}?${urlParams.toString()}`;
         },
         'fa-fire',
-        'red'
+        alreadyFired ? 'yellow' : 'red'
     );
     return false;
 }
@@ -1935,6 +1937,10 @@ function showConfirmationModal(title, text, proceedCallback, iconClass = 'fa-fir
             iconContainer.className = 'w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 flex-shrink-0';
             iconEl.classList.add('text-blue-400');
             proceedBtn.className = 'px-5 py-2.5 bg-blue-600/90 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-blue-500/20';
+        } else if (themeColor === 'yellow') {
+            iconContainer.className = 'w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 flex-shrink-0';
+            iconEl.classList.add('text-yellow-400');
+            proceedBtn.className = 'px-5 py-2.5 bg-yellow-600/90 hover:bg-yellow-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-yellow-500/20';
         } else {
             iconContainer.className = 'w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 flex-shrink-0';
             iconEl.classList.add('text-red-500');

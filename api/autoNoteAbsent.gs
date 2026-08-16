@@ -340,6 +340,39 @@ function parseStartMinutes(str) {
   return hour * 60 + minute;
 }
 
+// Builds the cell's stacked shift display from whatever RAW text is currently in the cell plus
+// one new shift line, deduped (exact match) and sorted chronologically by start time.
+// Unparseable lines (RDOT/DSOT/status text) sort after parseable ones, keeping their order.
+// Using the RAW cell text (not a previously-fallback-substituted value) here is what prevents
+// re-stacking an already-stacked cell as if it were a single "own shift" on repeat fires --
+// that's what caused unbounded line growth before this helper existed.
+function stackShiftLines(rawCellText, newShiftText) {
+  var lines = rawCellText
+    ? rawCellText
+        .split("\n")
+        .map(function (s) {
+          return s.trim();
+        })
+        .filter(function (s) {
+          return s !== "";
+        })
+    : [];
+
+  if (!newShiftText) return lines.join("\n");
+  if (lines.indexOf(newShiftText) !== -1) return lines.join("\n");
+
+  lines.push(newShiftText);
+  lines.sort(function (a, b) {
+    var aStart = parseStartMinutes(a);
+    var bStart = parseStartMinutes(b);
+    if (aStart === -1 && bStart === -1) return 0;
+    if (aStart === -1) return 1;
+    if (bStart === -1) return -1;
+    return aStart - bStart;
+  });
+  return lines.join("\n");
+}
+
 // Helper function to write coverage note + stacked shift value + color on covering employee's cell in Schedfile
 function addAbsentCoverageNote(
   schedfileSheet,
@@ -459,10 +492,13 @@ function addAbsentCoverageNote(
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
 
   // 4. Get original shift of the covering employee (read from their cell before we overwrite/modify anything)
-  var coveringOriginalShift = targetCell.getValue();
-  coveringOriginalShift = coveringOriginalShift
-    ? coveringOriginalShift.toString().trim()
-    : "";
+  // Keep rawCellText untouched (used later for stacking) -- coveringOriginalShift below may get
+  // fallback-substituted for note-display purposes, and stacking must never treat an already-
+  // stacked multi-line cell as if it were a single "own shift" (that caused unbounded growth
+  // on repeat fires).
+  var rawCellText = targetCell.getValue();
+  rawCellText = rawCellText ? rawCellText.toString().trim() : "";
+  var coveringOriginalShift = rawCellText;
   var coverCellWasBlank = !coveringOriginalShift;
 
   var isDSOT =
@@ -482,13 +518,11 @@ function addAbsentCoverageNote(
   // back to the time typed alongside their name (e.g. "Juan (1:00 PM - 10:00 PM)"), and if
   // even that's missing, copy the absent employee's shift as a single line. For DSOT, leave
   // it blank -- the typed time is the coverage segment (above), not their own shift.
-  var usedFallbackShift = false;
   if (!coveringOriginalShift && !isDSOT) {
     if (coverageShift) {
       coveringOriginalShift = coverageShift;
     } else if (originalShift) {
       coveringOriginalShift = originalShift.toString().trim();
-      usedFallbackShift = true;
     }
   }
 
@@ -554,35 +588,16 @@ function addAbsentCoverageNote(
     }
   }
 
-  // Stack the coverer's own shift and the covered (absent) shift into the cell value,
-  // earlier start time on top. Falls back to own-shift-on-top when either side isn't a
-  // parseable time (e.g. RDOT/DSOT/Agent mode status text) so it never throws.
-  // When we had nothing distinct for the coverer (usedFallbackShift), don't duplicate the
-  // absent employee's shift on both lines -- just show it once.
-  var stackedValue;
-  if (isDSOT) {
-    if (!coveringOriginalShift) {
-      stackedValue = dsotCoverageShift;
-    } else {
-      var dsotOwnStart = parseStartMinutes(coveringOriginalShift);
-      var dsotCoveredStart = parseStartMinutes(dsotCoverageShift);
-      if (dsotOwnStart !== -1 && dsotCoveredStart !== -1 && dsotCoveredStart < dsotOwnStart) {
-        stackedValue = dsotCoverageShift + "\n" + coveringOriginalShift;
-      } else {
-        stackedValue = coveringOriginalShift + "\n" + dsotCoverageShift;
-      }
-    }
-  } else if (usedFallbackShift) {
-    stackedValue = originalShift;
-  } else {
-    var ownStart = parseStartMinutes(coveringOriginalShift);
-    var coveredStart = parseStartMinutes(originalShift);
-    if (ownStart !== -1 && coveredStart !== -1 && coveredStart < ownStart) {
-      stackedValue = originalShift + "\n" + coveringOriginalShift;
-    } else {
-      stackedValue = coveringOriginalShift + "\n" + originalShift;
-    }
-  }
+  // Add this coverage's shift line to whatever's already in the cell (own shift, prior
+  // coverage lines, or blank), deduped and sorted chronologically. Uses rawCellText (the
+  // untouched read from step 4), never coveringOriginalShift, to avoid re-stacking an
+  // already-stacked cell as if it were a single line on repeat fires.
+  var shiftToAdd = isDSOT
+    ? dsotCoverageShift
+    : originalShift
+      ? originalShift.toString().trim()
+      : "";
+  var stackedValue = stackShiftLines(rawCellText, shiftToAdd);
   targetCell.setValue(stackedValue);
 
   // DSOT: coverer works their own regular shift elsewhere, so skip copying the absent

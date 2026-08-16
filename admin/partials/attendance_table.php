@@ -489,10 +489,11 @@ try {
                                 <?php endif; ?>
     
                                 <!-- FIRE BUTTON -->
-                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>" title="Fire Employee" class="text-red-600 hover:text-red-500 mr-3" onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>')">
+                                <?php $isFired = !empty($record['trigger_date']); $firedLabel = $isFired ? date('M d, Y g:i A', strtotime($record['trigger_date'])) : ''; ?>
+                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>" title="<?= $isFired ? 'Already fired on ' . htmlspecialchars($firedLabel) : 'Fire Employee' ?>" class="<?= $isFired ? 'text-green-500 hover:text-green-400' : 'text-red-600 hover:text-red-500' ?> mr-3" onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>', <?= $isFired ? 'true' : 'false' ?>, <?= htmlspecialchars(json_encode($firedLabel), ENT_QUOTES) ?>)">
                                     <i class="fas fa-fire"></i>
                                 </a>
-    
+
                                 <a href="vto_form.php?id=<?= $record['id'] ?>&type=<?= $type ?>" title="Edit record" class="text-primary-500 hover:text-primary-400 mr-3">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -732,10 +733,11 @@ try {
                                     <?php endif; ?>
                                 
                                 <!-- FIRE BUTTON -->
-                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>" 
-                                    title="Fire Employee" 
-                                    class="text-red-600 hover:text-red-500 mr-3" 
-                                    onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>')">
+                                <?php $isFired = !empty($record['trigger_date']); $firedLabel = $isFired ? date('M d, Y g:i A', strtotime($record['trigger_date'])) : ''; ?>
+                                <a href="attendance.php?fire_employee=<?= $record['id'] ?>&type=<?= $type ?>"
+                                    title="<?= $isFired ? 'Already fired on ' . htmlspecialchars($firedLabel) : 'Fire Employee' ?>"
+                                    class="<?= $isFired ? 'text-green-500 hover:text-green-400' : 'text-red-600 hover:text-red-500' ?> mr-3"
+                                    onclick="return fireEmployee(<?= $record['id'] ?>, '<?= $type ?>', <?= $isFired ? 'true' : 'false' ?>, <?= htmlspecialchars(json_encode($firedLabel), ENT_QUOTES) ?>)">
                                         <i class="fas fa-fire"></i>
                                 </a>
                                 
