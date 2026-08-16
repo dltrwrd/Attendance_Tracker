@@ -36,6 +36,11 @@ function fetchDataFromPHP() {
     // Process sheets sequentially (more reliable than parallel in Apps Script)
     if (absenteeismSheet) {
       processSheet("absenteeism", absenteeismSheet);
+      // ABSENTEEISM is a QUERY() formula off AbsenteeismData, so flushing lets the "fire" value
+      // spill through immediately, then we check right away instead of waiting for
+      // checkForFireTriggersAbsent's own separate 1-5 min trigger to eventually catch it.
+      SpreadsheetApp.flush();
+      checkForFireTriggersAbsent();
     }
 
     if (tardinessSheet) {
@@ -45,6 +50,9 @@ function fetchDataFromPHP() {
     // Add processing for VTO tracker
     if (vtoTrackerSheet) {
       processSheet("vto_tracker", vtoTrackerSheet);
+      // Same reasoning as absenteeism above -- VTO is a QUERY() formula off vtoData.
+      SpreadsheetApp.flush();
+      checkForFireTriggersVTO();
     }
 
     // Add processing for Headset tracker
