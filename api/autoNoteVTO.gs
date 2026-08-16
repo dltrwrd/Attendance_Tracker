@@ -198,6 +198,18 @@ function addNoteToNotefile(rowNumber) {
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
   var vtoAgentColor = targetCell.getBackground(); // capture BEFORE overwrite, used to color the coverer's cell
 
+  // Re-fire guard: if this row was already fired before, the cell is already our own cyan
+  // "VTO" marker, not the true original color. Don't propagate that to coverers -- null it
+  // out so the color step is skipped for them (notes/values still update normally on re-fire).
+  var existingValue = targetCell.getValue();
+  if (
+    existingValue === "VTO" ||
+    existingValue === "VTO - WD" ||
+    vtoAgentColor.toUpperCase() === "#00FFFF"
+  ) {
+    vtoAgentColor = null;
+  }
+
   var comment =
     "VTO Type: " +
     VTOType +
@@ -223,23 +235,6 @@ function addNoteToNotefile(rowNumber) {
     "\n" +
     sltDuty;
 
-  var existingNote = targetCell.getNote();
-  if (existingNote && existingNote.trim() !== "") {
-    // Append instead of overwrite so a late/undertime note written earlier isn't wiped out
-    if (existingNote.indexOf(comment.trim()) === -1) {
-      targetCell.setNote(existingNote.trim() + "\n\n" + comment);
-    }
-  } else {
-    targetCell.setNote(comment);
-  }
-  // Set cell value based on MinsWorked
-  if (MinsWorked === 0) {
-    targetCell.setValue("VTO - WD");
-  } else {
-    targetCell.setValue("VTO");
-  }
-  targetCell.setBackground("#00FFFF");
-
   // Auto-note for the person who covered (VTO). Reuses isNoRealCoverer from autoNoteAbsent.gs
   // (same GAS project, shared global scope) to skip placeholder text like "TAGGED AS (BACK UP)".
   if (
@@ -261,6 +256,25 @@ function addNoteToNotefile(rowNumber) {
       vtoAgentColor,
     );
   }
+
+  // Overwrite this cell LAST, after the coverer is colored using the true captured original --
+  // so the coverer never sees this cyan "VTO" overwrite instead of the real color.
+  var existingNote = targetCell.getNote();
+  if (existingNote && existingNote.trim() !== "") {
+    // Append instead of overwrite so a late/undertime note written earlier isn't wiped out
+    if (existingNote.indexOf(comment.trim()) === -1) {
+      targetCell.setNote(existingNote.trim() + "\n\n" + comment);
+    }
+  } else {
+    targetCell.setNote(comment);
+  }
+  // Set cell value based on MinsWorked
+  if (MinsWorked === 0) {
+    targetCell.setValue("VTO - WD");
+  } else {
+    targetCell.setValue("VTO");
+  }
+  targetCell.setBackground("#00FFFF");
 
   Browser.msgBox(
     "Success!",

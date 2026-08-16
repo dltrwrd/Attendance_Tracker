@@ -201,6 +201,13 @@ function addNoteToSchedfile(rowNumber) {
   var targetCell = schedfileSheet.getRange(nameRow, dateColumn);
   var agent1Color = targetCell.getBackground(); // capture BEFORE overwrite, used to color the coverer's cell
 
+  // Re-fire guard: if this row was already fired before, the cell is already our own red
+  // "ABSENT" marker, not the true original color. Don't propagate that to coverers -- null it
+  // out so the color step is skipped for them (notes/values still update normally on re-fire).
+  if (targetCell.getValue() === "ABSENT" || agent1Color.toUpperCase() === "#FF0000") {
+    agent1Color = null;
+  }
+
   var comment =
     sanction +
     "\n" +
@@ -236,11 +243,6 @@ function addNoteToSchedfile(rowNumber) {
     "\n" +
     "\n" +
     sltDuty;
-
-  targetCell.setNote(comment);
-  targetCell.setValue("ABSENT");
-  targetCell.setBackground("#FF0000"); // Red color
-  targetCell.setFontColor("#FFFFFF"); // White font color
 
   // Auto-note for the people who covered (Absenteeism)
   var cleanCovName1 = coverage1
@@ -374,6 +376,13 @@ function addNoteToSchedfile(rowNumber) {
       }
     }
   }
+
+  // Overwrite Agent1's own cell LAST, after all coverers are colored using the true captured
+  // original -- so no coverer ever sees this red "ABSENT" overwrite instead of the real color.
+  targetCell.setNote(comment);
+  targetCell.setValue("ABSENT");
+  targetCell.setBackground("#FF0000"); // Red color
+  targetCell.setFontColor("#FFFFFF"); // White font color
 }
 
 // True when a coverage field is a placeholder note (e.g. "TAGGED AS (BACK UP)", "NO NEED
