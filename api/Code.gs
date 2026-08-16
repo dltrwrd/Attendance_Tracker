@@ -45,6 +45,9 @@ function fetchDataFromPHP() {
 
     if (tardinessSheet) {
       processSheet("tardiness", tardinessSheet);
+      // Same reasoning as absenteeism above -- TARDINESS is a QUERY() formula off TardinessData.
+      SpreadsheetApp.flush();
+      checkForFireTriggers();
     }
 
     // Add processing for VTO tracker
