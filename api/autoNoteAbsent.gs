@@ -571,10 +571,14 @@ function addAbsentCoverageNote(
     coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
 
   // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
+  // Strip whitespace before matching -- real data uses "BACK UP" (with a space), which
+  // wouldn't match a plain "BACKUP" substring check.
+  var normalizedCoverageType = coverageType
+    ? coverageType.toString().toUpperCase().replace(/\s+/g, "")
+    : "";
   var isBackupOrAgentMode =
-    coverageType &&
-    (coverageType.toString().toUpperCase().indexOf("BACKUP") !== -1 ||
-      coverageType.toString().toUpperCase().indexOf("AGENT MODE") !== -1);
+    normalizedCoverageType.indexOf("BACKUP") !== -1 ||
+    normalizedCoverageType.indexOf("AGENTMODE") !== -1;
 
   // DSOT: the typed time (e.g. "Juan (11:00 PM - 3:00 AM)") is the SEGMENT of the absent
   // employee's shift this coverer handles, not their own shift -- matters when multiple
