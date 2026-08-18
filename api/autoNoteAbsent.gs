@@ -569,6 +569,9 @@ function addAbsentCoverageNote(
   var isDSOT =
     coverageType &&
     coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+  var isRDOT =
+    coverageType &&
+    coverageType.toString().toUpperCase().indexOf("RDOT") !== -1;
 
   // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
   // Strip whitespace before matching -- real data uses "BACK UP" (with a space), which
@@ -600,7 +603,7 @@ function addAbsentCoverageNote(
   }
 
   var comment = "";
-  if (isDSOT) {
+  if (isDSOT || isRDOT) {
     comment =
       "COVERAGE: " +
       absentEmployeeName +
@@ -673,10 +676,11 @@ function addAbsentCoverageNote(
     targetCell.setValue(stackedValue);
   }
 
-  // DSOT: skip the format copy (coverer works their own shift elsewhere) unless their cell
-  // was blank to begin with. Full paste-format-only (background, font family/size/weight/
-  // style/color, alignment, borders, number format) via copyTo, like Ctrl+Alt+V.
-  if (agent1Cell && (!isDSOT || coverCellWasBlank)) {
+  // DSOT/RDOT: skip the format copy (coverer works their own shift elsewhere) unless their
+  // cell was blank to begin with. BACKUP/AGENT MODE (and any other type) always copies. Full
+  // paste-format-only (background, font family/size/weight/style/color, alignment, borders,
+  // number format) via copyTo, like Ctrl+Alt+V.
+  if (agent1Cell && (!(isDSOT || isRDOT) || coverCellWasBlank)) {
     agent1Cell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   }
 
