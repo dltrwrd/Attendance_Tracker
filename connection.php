@@ -1,8 +1,8 @@
 <?php
 $host = 'localhost';
-$dbname = 'u865665685_cxi_database';
-$username = 'u865665685_cxi_database';
-$password = 'Wea_dayaday05';
+$dbname = 'cxi_slt_tracker';
+$username = 'root';
+$password = '';
 
 $con = mysqli_connect($host, $username, $password, $dbname);
 

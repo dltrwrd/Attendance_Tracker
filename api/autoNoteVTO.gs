@@ -43,8 +43,15 @@ function checkForFireTriggersVTO() {
       var fireValue = data[i][17]; // Column P is index 15 (0-based)
 
       if (fireValue && fireValue.toString().toLowerCase() === "fire") {
-        addNoteToNotefile(rowNumber);
-        sheet.getRange(rowNumber, triggerColumn).clearContent();
+        try {
+          addNoteToNotefile(rowNumber);
+          sheet.getRange(rowNumber, triggerColumn).clearContent();
+        } catch (rowError) {
+          // Isolate this row's failure so one bad record doesn't block the rest of the batch.
+          Logger.log(
+            "Error firing VTO row " + rowNumber + ": " + rowError.toString(),
+          );
+        }
       }
     }
   } catch (error) {
@@ -85,23 +92,18 @@ function addNoteToNotefile(rowNumber) {
   try {
     externalSs = SpreadsheetApp.openById(externalSpreadsheetId);
   } catch (e) {
-    Browser.msgBox(
-      "Error",
-      "Could not open the external spreadsheet. Please check the ID and your permissions. Error: " +
+    Logger.log(
+      "addNoteToNotefile row " + rowNumber + ": could not open external spreadsheet. " +
         e.message,
-      Browser.Buttons.OK,
     );
     return;
   }
 
   var schedfileSheet = externalSs.getSheetByName(externalSheetName);
   if (!schedfileSheet) {
-    Browser.msgBox(
-      "Error",
-      "The sheet named '" +
-        externalSheetName +
-        "' was not found in the external spreadsheet.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteToNotefile row " + rowNumber + ": sheet '" + externalSheetName +
+        "' not found in external spreadsheet.",
     );
     return;
   }
@@ -119,12 +121,9 @@ function addNoteToNotefile(rowNumber) {
   var sltDuty = mainSheet.getRange("Q" + rowNumber).getValue();
 
   if (!name || !dateStrMain) {
-    Browser.msgBox(
-      "Data Missing",
-      "Please ensure 'Name' (Column D) and 'Date' (Column A) are filled in row " +
-        rowNumber +
-        ".",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteToNotefile row " + rowNumber +
+        ": missing Name (Column D) or Date (Column A).",
     );
     return;
   }
@@ -155,14 +154,9 @@ function addNoteToNotefile(rowNumber) {
   }
 
   if (dateColumn === -1) {
-    Browser.msgBox(
-      "Date Not Found",
-      "The date '" +
-        dateStrMain +
-        "' was not found in the header row of '" +
-        externalSheetName +
-        "'.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteToNotefile row " + rowNumber + ": date '" + dateStrMain +
+        "' not found in header row of '" + externalSheetName + "'.",
     );
     return;
   }
@@ -183,14 +177,9 @@ function addNoteToNotefile(rowNumber) {
   }
 
   if (nameRow === -1) {
-    Browser.msgBox(
-      "Employee ID Not Found",
-      "The Employee ID '" +
-        empId +
-        "' was not found in Column A of '" +
-        externalSheetName +
-        "'.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteToNotefile row " + rowNumber + ": Employee ID '" + empId +
+        "' not found in Column A of '" + externalSheetName + "'.",
     );
     return;
   }
@@ -278,18 +267,9 @@ function addNoteToNotefile(rowNumber) {
   }
   targetCell.setBackground("#00FFFF");
 
-  Browser.msgBox(
-    "Success!",
-    "Note added to cell " +
-      targetCell.getA1Notation() +
-      " in '" +
-      externalSheetName +
-      "' for " +
-      name +
-      " on " +
-      dateStrMain +
-      ".",
-    Browser.Buttons.OK,
+  Logger.log(
+    "Note added to cell " + targetCell.getA1Notation() + " in '" +
+      externalSheetName + "' for " + name + " on " + dateStrMain + ".",
   );
 }
 

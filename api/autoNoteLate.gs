@@ -43,8 +43,15 @@ function checkForFireTriggers() {
       var fireValue = data[i][15]; // Column P is index 15 (0-based)
 
       if (fireValue && fireValue.toString().toLowerCase() === "fire") {
-        addNoteTofile(rowNumber);
-        sheet.getRange(rowNumber, triggerColumn).clearContent();
+        try {
+          addNoteTofile(rowNumber);
+          sheet.getRange(rowNumber, triggerColumn).clearContent();
+        } catch (rowError) {
+          // Isolate this row's failure so one bad record doesn't block the rest of the batch.
+          Logger.log(
+            "Error firing late row " + rowNumber + ": " + rowError.toString(),
+          );
+        }
       }
     }
   } catch (error) {
@@ -85,23 +92,18 @@ function addNoteTofile(rowNumber) {
   try {
     externalSs = SpreadsheetApp.openById(externalSpreadsheetId);
   } catch (e) {
-    Browser.msgBox(
-      "Error",
-      "Could not open the external spreadsheet. Please check the ID and your permissions. Error: " +
+    Logger.log(
+      "addNoteTofile row " + rowNumber + ": could not open external spreadsheet. " +
         e.message,
-      Browser.Buttons.OK,
     );
     return;
   }
 
   var schedfileSheet = externalSs.getSheetByName(externalSheetName);
   if (!schedfileSheet) {
-    Browser.msgBox(
-      "Error",
-      "The sheet named '" +
-        externalSheetName +
-        "' was not found in the external spreadsheet.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteTofile row " + rowNumber + ": sheet '" + externalSheetName +
+        "' not found in external spreadsheet.",
     );
     return;
   }
@@ -128,12 +130,9 @@ function addNoteTofile(rowNumber) {
   var coverageDetails = mainSheet.getRange("U" + rowNumber).getValue();
 
   if (!name || !dateStrMain) {
-    Browser.msgBox(
-      "Data Missing",
-      "Please ensure 'Name' (Column C) and 'Date' (Column G) are filled in row " +
-        rowNumber +
-        ".",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteTofile row " + rowNumber +
+        ": missing Name (Column C) or Date (Column G).",
     );
     return;
   }
@@ -165,14 +164,9 @@ function addNoteTofile(rowNumber) {
   }
 
   if (dateColumn === -1) {
-    Browser.msgBox(
-      "Date Not Found",
-      "The date '" +
-        dateStrMain +
-        "' was not found in the header row of '" +
-        externalSheetName +
-        "'.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteTofile row " + rowNumber + ": date '" + dateStrMain +
+        "' not found in header row of '" + externalSheetName + "'.",
     );
     return;
   }
@@ -194,14 +188,9 @@ function addNoteTofile(rowNumber) {
   }
 
   if (nameRow === -1) {
-    Browser.msgBox(
-      "Employee ID Not Found",
-      "The Employee ID '" +
-        empId +
-        "' was not found in Column A of '" +
-        externalSheetName +
-        "'.",
-      Browser.Buttons.OK,
+    Logger.log(
+      "addNoteTofile row " + rowNumber + ": Employee ID '" + empId +
+        "' not found in Column A of '" + externalSheetName + "'.",
     );
     return;
   }
