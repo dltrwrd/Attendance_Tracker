@@ -6,9 +6,44 @@ var CONFIG = {
   timeout: 10, // seconds for URLFetch
 };
 
+// Must match includes/functions.php's triggerAutoNoteWebhook() $webhookSecret.
+var WEBHOOK_SECRET = "cxi-autonote-fire-9f3a7c2e51";
+
 // Global variables
 var refreshTriggerId = null;
 var lastExecutionTime = null;
+
+// Web App entry point -- PHP calls this right after setting fire_trigger in MySQL, so the
+// sync + fire-check runs immediately instead of waiting for the 1-minute scheduled trigger.
+// The scheduled trigger (startAutoRefresh) still runs independently as a fallback in case
+// this call never lands (PHP-side network issue, timeout, etc).
+function doGet(e) {
+  return handleWebhookPing(e);
+}
+
+function doPost(e) {
+  return handleWebhookPing(e);
+}
+
+function handleWebhookPing(e) {
+  var params = (e && e.parameter) || {};
+  if (params.secret !== WEBHOOK_SECRET) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ success: false, error: "Unauthorized" }),
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    fetchDataFromPHP();
+    return ContentService.createTextOutput(
+      JSON.stringify({ success: true }),
+    ).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ success: false, error: err.toString() }),
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
 function fetchDataFromPHP() {
   var startTime = new Date();

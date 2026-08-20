@@ -12,6 +12,203 @@ updateLastActivity();
 $_SESSION['attendance_return_url'] = $_SERVER['REQUEST_URI'];
 
 // ==========================================
+// HELPERS: Create Summary feature (Absence / Tardiness / VTO)
+// ==========================================
+function buildCoverageText($row) {
+    $entries = [];
+    for ($i = 1; $i <= 4; $i++) {
+        $cov = trim($row["coverage_{$i}"] ?? '');
+        if ($cov === '') continue;
+        $covType = trim($row["coverage_type_{$i}"] ?? '');
+        $covDetail = trim($row["coverage_details_{$i}"] ?? '');
+
+        if (strtoupper($covType) === 'PENDING') {
+            $entries[] = $cov;
+        } elseif ($covType !== '' && $covType !== '-') {
+            if ($covDetail !== '' && $covDetail !== '-') {
+                $entries[] = "{$cov} ({$covType} - {$covDetail})";
+            } else {
+                $entries[] = "{$cov} ({$covType})";
+            }
+        } else {
+            $entries[] = $cov;
+        }
+    }
+    return !empty($entries) ? implode(' | ', $entries) : 'PENDING';
+}
+
+function buildSummaryText($summaryType, $rows) {
+    $titleMap = [
+        'absence'    => 'ABSENCE SUMMARY',
+        'tardiness'  => 'TARDINESS SUMMARY',
+        'vto'        => 'VTO SUMMARY',
+    ];
+    $title = $titleMap[$summaryType] ?? (strtoupper($summaryType) . ' SUMMARY');
+
+    if (empty($rows)) {
+        return "*{$title}*\n\nNo records found for the selected criteria.";
+    }
+
+    $separator = "\n------------------------------\n";
+    $blocks = [];
+
+    foreach ($rows as $row) {
+        $fullName   = strtoupper(trim($row['full_name'] ?? ''));
+        $department = strtoupper(trim($row['department'] ?? ''));
+        $shift      = trim($row['shift'] ?? '');
+
+        if ($summaryType === 'absence') {
+            $sanction = strtoupper(trim($row['sanction'] ?? ''));
+            if ($sanction === '') $sanction = 'ABSENCE';
+            $coverage = buildCoverageText($row);
+
+            $blocks[] = "{$sanction}\n"
+                      . "Name of Employee: {$fullName}\n"
+                      . "DEPARTMENT: {$department}\n"
+                      . "Scheduled Shift: {$shift}\n"
+                      . "Covered/Uncovered?: {$coverage}";
+        } elseif ($summaryType === 'tardiness') {
+            $lateType = strtoupper(trim($row['types'] ?? ''));
+            if ($lateType === '') $lateType = 'LATE';
+            $minutesLate = trim((string)($row['minutes_late'] ?? '0'));
+            if ($minutesLate === '') $minutesLate = '0';
+
+            $blocks[] = "{$lateType}\n"
+                      . "Name of Employee: {$fullName}\n"
+                      . "DEPARTMENT: {$department}\n"
+                      . "Scheduled Shift: {$shift}\n"
+                      . "Minutes late: {$minutesLate} minutes late";
+        } elseif ($summaryType === 'vto') {
+            $vtoType = strtoupper(trim($row['vto_type'] ?? ''));
+
+            $blocks[] = "Name of Employee: {$fullName}\n"
+                      . "DEPARTMENT: {$department}\n"
+                      . "Scheduled Shift: {$shift}\n"
+                      . "VTO Type: {$vtoType}";
+        }
+    }
+
+    return "*{$title}*\n\n" . implode($separator, $blocks);
+}
+
+// ==========================================
+// AJAX ACTION: Create Summary (filter-based or selected-record-based)
+// ==========================================
+if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'generate_summary') {
+    header('Content-Type: application/json');
+    try {
+        $summaryType = $_GET['summary_type'] ?? 'absence';
+        if (!in_array($summaryType, ['absence', 'tardiness', 'vto'], true)) {
+            $summaryType = 'absence';
+        }
+        $mode = $_GET['mode'] ?? 'filter';
+
+        $table     = ($summaryType === 'tardiness') ? 'tardiness' : (($summaryType === 'vto') ? 'vto_tracker' : 'absenteeism');
+        $dateField = ($summaryType === 'tardiness') ? 'date_of_incident' : (($summaryType === 'vto') ? 'shift_date' : 'date_of_absent');
+
+        $rows = [];
+
+        if ($mode === 'ids') {
+            $idsRaw = $_GET['ids'] ?? '';
+            $ids = array_values(array_filter(array_map('intval', explode(',', $idsRaw))));
+
+            if (empty($ids)) {
+                echo json_encode(['success' => false, 'message' => 'No records selected.']);
+                exit;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmt = $pdo->prepare("SELECT * FROM $table WHERE id IN ($placeholders)");
+            $stmt->execute($ids);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $departments = $_GET['departments'] ?? [];
+            if (!is_array($departments)) {
+                $departments = array_filter(array_map('trim', explode(',', (string)$departments)));
+            }
+            $dateFrom = trim($_GET['date_from'] ?? '');
+            $dateTo   = trim($_GET['date_to'] ?? '');
+            $timeFrom = trim($_GET['time_from'] ?? '');
+            $timeTo   = trim($_GET['time_to'] ?? '');
+
+            $whereClauses = [];
+            $params = [];
+
+            if (!empty($departments)) {
+                $deptPlaceholders = [];
+                foreach (array_values($departments) as $i => $d) {
+                    $key = ":dept{$i}";
+                    $deptPlaceholders[] = $key;
+                    $params[$key] = $d;
+                }
+                $whereClauses[] = "department IN (" . implode(',', $deptPlaceholders) . ")";
+            }
+            if ($dateFrom !== '') {
+                $whereClauses[] = "$dateField >= :date_from";
+                $params[':date_from'] = $dateFrom;
+            }
+            if ($dateTo !== '') {
+                $whereClauses[] = "$dateField <= :date_to";
+                $params[':date_to'] = $dateTo;
+            }
+
+            $sql = "SELECT * FROM $table" . (!empty($whereClauses) ? ' WHERE ' . implode(' AND ', $whereClauses) : '');
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Absence-only: filter by the shift's START time (shift column format "3:00 AM - 11:30 AM")
+            if ($summaryType === 'absence' && ($timeFrom !== '' || $timeTo !== '')) {
+                $fromMinutes = null;
+                $toMinutes = null;
+                if ($timeFrom !== '') {
+                    [$fh, $fm] = array_map('intval', explode(':', $timeFrom));
+                    $fromMinutes = ($fh * 60) + $fm;
+                }
+                if ($timeTo !== '') {
+                    [$th, $tm] = array_map('intval', explode(':', $timeTo));
+                    $toMinutes = ($th * 60) + $tm;
+                }
+
+                $rows = array_values(array_filter($rows, function ($r) use ($fromMinutes, $toMinutes) {
+                    $shift = $r['shift'] ?? '';
+                    $parts = explode('-', $shift);
+                    $startRaw = trim($parts[0] ?? '');
+                    if ($startRaw === '') return false;
+
+                    $ts = strtotime($startRaw);
+                    if ($ts === false) return false;
+
+                    $startMinutes = ((int)date('H', $ts) * 60) + (int)date('i', $ts);
+
+                    if ($fromMinutes !== null && $toMinutes !== null) {
+                        if ($fromMinutes <= $toMinutes) {
+                            return $startMinutes >= $fromMinutes && $startMinutes <= $toMinutes;
+                        }
+                        // Overnight wrap-around range (e.g. 10PM - 4AM)
+                        return $startMinutes >= $fromMinutes || $startMinutes <= $toMinutes;
+                    } elseif ($fromMinutes !== null) {
+                        return $startMinutes >= $fromMinutes;
+                    } elseif ($toMinutes !== null) {
+                        return $startMinutes <= $toMinutes;
+                    }
+                    return true;
+                }));
+            }
+        }
+
+        $summaryText = buildSummaryText($summaryType, $rows);
+        echo json_encode(['success' => true, 'summary' => $summaryText, 'count' => count($rows)]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+// ==========================================
+
+// ==========================================
 // AJAX ACTION: Generate Absence Report
 // ==========================================
 if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'generate_report') {
@@ -218,6 +415,8 @@ if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'bulk_fire') {
             $stmt = $pdo->prepare($sql);
             $params = array_merge([$trigger_date], $ids);
             $stmt->execute($params);
+            
+            triggerAutoNoteWebhook();
             
             echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
         } else {
@@ -480,6 +679,7 @@ if (isset($_GET['fire_employee'])) {
             $updateStmt->execute([$trigger_date, $id]);
             
             logActivity("Fire autonote of {$record['employee_id']} from {$type}");
+            triggerAutoNoteWebhook();
             $_SESSION['success'] = "Autonote has been fired!";
         } else {
             $_SESSION['error'] = "Record not found";
@@ -627,6 +827,11 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                     <button id="bulkFireBtn" class="hidden glass-panel hover:bg-red-600/80 text-red-300 hover:text-white px-4 py-2.5 rounded-xl border-red-500/30 transition-all shadow-lg text-sm font-medium flex items-center">
                         <i class="fas fa-fire mr-2"></i> Bulk Fire
                     </button>
+
+                    <!-- NEW QUICK SUMMARY BUTTON (appears when row checkboxes are selected) -->
+                    <button id="quickSummaryBtn" class="hidden glass-panel hover:bg-sky-600/80 text-sky-300 hover:text-white px-4 py-2.5 rounded-xl border-sky-500/30 transition-all shadow-lg text-sm font-medium flex items-center">
+                        <i class="fas fa-bolt mr-2"></i> Quick Summary
+                    </button>
                     
                     <!-- NEW COPY ABSENCE REPORT BUTTON -->
                     <?php if ($currentTab === 'absenteeism'): ?>
@@ -634,6 +839,11 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                         <i class="fas fa-copy mr-2"></i> Copy Absence Report
                     </button>
                     <?php endif; ?>
+
+                    <!-- NEW CREATE SUMMARY BUTTON -->
+                    <button id="createSummaryBtn" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-sky-900/30 transition-all flex items-center font-medium text-sm">
+                        <i class="fas fa-file-invoice mr-2"></i> Create Summary
+                    </button>
                     
                     <a href="<?= $currentTab === 'vto' ? 'vto_form.php' : 'attendance_form.php' ?>?action=create&type=<?= $currentTab ?>" class="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-primary-900/30 transition-all flex items-center font-medium text-sm">
                         <i class="fas fa-plus mr-2"></i> Add New Record
@@ -1314,6 +1524,165 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
+    // Quick Summary Logic (uses currently checked row checkboxes + current tab type)
+    const quickSummaryBtn = document.getElementById('quickSummaryBtn');
+    if (quickSummaryBtn) {
+        quickSummaryBtn.addEventListener('click', function() {
+            const selectedIds = Array.from(document.querySelectorAll('.record-checkbox')).filter(cb => cb.checked).map(cb => cb.getAttribute('data-id'));
+            if (selectedIds.length === 0) return alert('Please select at least one record.');
+
+            const tab = '<?= $currentTab ?>';
+            const summaryType = tab === 'tardiness' ? 'tardiness' : (tab === 'vto' ? 'vto' : 'absence');
+
+            const btn = this;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Generating...';
+            btn.disabled = true;
+
+            const params = new URLSearchParams({
+                ajax_action: 'generate_summary',
+                mode: 'ids',
+                summary_type: summaryType,
+                ids: selectedIds.join(',')
+            });
+
+            fetch('attendance.php?' + params.toString())
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        navigator.clipboard.writeText(data.summary).then(() => {
+                            btn.innerHTML = '<i class="fas fa-check mr-2"></i> Copied!';
+                            setTimeout(() => {
+                                btn.innerHTML = originalHTML;
+                                btn.disabled = false;
+                            }, 1500);
+                        }).catch(err => {
+                            console.error('Clipboard write failed:', err);
+                            alert('Failed to copy to clipboard. Check permissions.');
+                            btn.innerHTML = originalHTML;
+                            btn.disabled = false;
+                        });
+                    } else {
+                        alert('Error generating summary: ' + (data.message || 'Unknown error'));
+                        btn.innerHTML = originalHTML;
+                        btn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching summary:', error);
+                    alert('Network error occurred while generating the summary.');
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                });
+        });
+    }
+
+    // Create Summary Modal Logic
+    const createSummaryBtn = document.getElementById('createSummaryBtn');
+    if (createSummaryBtn) {
+        createSummaryBtn.addEventListener('click', function() {
+            openCreateSummaryModal();
+        });
+    }
+
+    const summaryTypeSelect = document.getElementById('summaryTypeSelect');
+    if (summaryTypeSelect) {
+        summaryTypeSelect.addEventListener('change', function() {
+            updateSummaryFormVisibility(this.value);
+        });
+        updateSummaryFormVisibility(summaryTypeSelect.value);
+    }
+
+    const summarySelectAllDeptBtn = document.getElementById('summarySelectAllDeptBtn');
+    if (summarySelectAllDeptBtn) {
+        summarySelectAllDeptBtn.addEventListener('click', function() {
+            const activeType = document.getElementById('summaryTypeSelect').value;
+            document.querySelectorAll(`.summary-dept-group[data-summary-type="${activeType}"] .summary-dept-checkbox`).forEach(cb => cb.checked = true);
+        });
+    }
+    const summaryClearDeptBtn = document.getElementById('summaryClearDeptBtn');
+    if (summaryClearDeptBtn) {
+        summaryClearDeptBtn.addEventListener('click', function() {
+            const activeType = document.getElementById('summaryTypeSelect').value;
+            document.querySelectorAll(`.summary-dept-group[data-summary-type="${activeType}"] .summary-dept-checkbox`).forEach(cb => cb.checked = false);
+        });
+    }
+
+    const summaryGenerateBtn = document.getElementById('summaryGenerateBtn');
+    if (summaryGenerateBtn) {
+        summaryGenerateBtn.addEventListener('click', function() {
+            const btn = this;
+            const originalHTML = btn.innerHTML;
+            const summaryType = document.getElementById('summaryTypeSelect').value;
+
+            const activeGroup = document.querySelector(`.summary-dept-group[data-summary-type="${summaryType}"]`);
+            const selectedDepts = activeGroup
+                ? Array.from(activeGroup.querySelectorAll('.summary-dept-checkbox:checked')).map(cb => cb.value)
+                : [];
+
+            const dateFrom = document.getElementById('summaryDateFrom').value;
+            const dateTo = document.getElementById('summaryDateTo').value;
+            const timeFrom = document.getElementById('summaryTimeFrom').value;
+            const timeTo = document.getElementById('summaryTimeTo').value;
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Generating...';
+            btn.disabled = true;
+
+            const params = new URLSearchParams({
+                ajax_action: 'generate_summary',
+                mode: 'filter',
+                summary_type: summaryType,
+                date_from: dateFrom,
+                date_to: dateTo
+            });
+            selectedDepts.forEach(d => params.append('departments[]', d));
+            if (summaryType === 'absence') {
+                if (timeFrom) params.append('time_from', timeFrom);
+                if (timeTo) params.append('time_to', timeTo);
+            }
+
+            fetch('attendance.php?' + params.toString())
+                .then(response => response.json())
+                .then(data => {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    if (data.success) {
+                        const outputWrapper = document.getElementById('summaryOutputWrapper');
+                        const outputText = document.getElementById('summaryOutputText');
+                        const outputCount = document.getElementById('summaryRecordCount');
+                        outputText.value = data.summary;
+                        outputCount.textContent = data.count;
+                        outputWrapper.classList.remove('hidden');
+                        document.getElementById('summaryCopyBtn').classList.remove('hidden');
+                    } else {
+                        alert('Error generating summary: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching summary:', error);
+                    alert('Network error occurred while generating the summary.');
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                });
+        });
+    }
+
+    const summaryCopyBtn = document.getElementById('summaryCopyBtn');
+    if (summaryCopyBtn) {
+        summaryCopyBtn.addEventListener('click', function() {
+            const btn = this;
+            const originalHTML = btn.innerHTML;
+            const text = document.getElementById('summaryOutputText').value;
+            navigator.clipboard.writeText(text).then(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i> Copied!';
+                setTimeout(() => { btn.innerHTML = originalHTML; }, 1500);
+            }).catch(err => {
+                console.error('Clipboard write failed:', err);
+                alert('Failed to copy to clipboard. Check permissions.');
+            });
+        });
+    }
+
     // Existing Checkbox logic
     document.addEventListener('change', function(e) {
         if (e.target.id === 'selectAllCheckbox') {
@@ -1495,6 +1864,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function toggleActionButtons() {
         const anyChecked = Array.from(document.querySelectorAll('.record-checkbox')).some(cb => cb.checked);
+        const quickSummaryBtnEl = document.getElementById('quickSummaryBtn');
         if (anyChecked) {
             if ('<?= $currentTab ?>' !== 'vto') {
                 if (noNeedEmailBtn) noNeedEmailBtn.classList.remove('hidden');
@@ -1502,11 +1872,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (bulkEmailBtn) bulkEmailBtn.classList.remove('hidden');
             }
             if (bulkFireBtn) bulkFireBtn.classList.remove('hidden');
+            if (quickSummaryBtnEl) quickSummaryBtnEl.classList.remove('hidden');
         } else {
             if (noNeedEmailBtn) noNeedEmailBtn.classList.add('hidden');
             if (reTrackEmailBtn) reTrackEmailBtn.classList.add('hidden');
             if (bulkEmailBtn) bulkEmailBtn.classList.add('hidden');
             if (bulkFireBtn) bulkFireBtn.classList.add('hidden');
+            if (quickSummaryBtnEl) quickSummaryBtnEl.classList.add('hidden');
         }
     }
     
@@ -2031,6 +2403,54 @@ document.addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) { 
     if (e.key === 'Escape' && !document.getElementById('copyReportModal').classList.contains('hidden')) closeCopyReportModal(); 
 });
+
+function updateSummaryFormVisibility(summaryType) {
+    document.querySelectorAll('.summary-dept-group').forEach(group => {
+        group.classList.toggle('hidden', group.getAttribute('data-summary-type') !== summaryType);
+    });
+    const timeWrapper = document.getElementById('summaryTimeRangeWrapper');
+    if (timeWrapper) {
+        timeWrapper.classList.toggle('hidden', summaryType !== 'absence');
+    }
+}
+
+function openCreateSummaryModal() {
+    const modal = document.getElementById('createSummaryModal');
+    if (!modal) return;
+    const modalBox = modal.querySelector('div');
+
+    // Reset output area each time it's opened
+    const outputWrapper = document.getElementById('summaryOutputWrapper');
+    const summaryCopyBtn = document.getElementById('summaryCopyBtn');
+    if (outputWrapper) outputWrapper.classList.add('hidden');
+    if (summaryCopyBtn) summaryCopyBtn.classList.add('hidden');
+
+    modal.classList.remove('hidden');
+    void modal.offsetWidth;
+    modal.classList.remove('opacity-0');
+    modalBox.classList.remove('scale-95');
+    modalBox.classList.add('scale-100');
+}
+
+function closeCreateSummaryModal() {
+    const modal = document.getElementById('createSummaryModal');
+    if (!modal) return;
+    const modalBox = modal.querySelector('div');
+
+    modal.classList.add('opacity-0');
+    modalBox.classList.add('scale-95');
+    modalBox.classList.remove('scale-100');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+document.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('createSummaryModal')) closeCreateSummaryModal();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !document.getElementById('createSummaryModal').classList.contains('hidden')) closeCreateSummaryModal();
+});
 </script>
 
 <div id="historyModal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
@@ -2079,6 +2499,104 @@ document.addEventListener('keydown', function(e) {
             </button>
             <button id="modalGenerateReportBtn" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-950/20 transition-all flex items-center font-medium text-sm">
                 <i class="fas fa-file-alt mr-2"></i> Generate & Copy
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- CREATE SUMMARY MODAL -->
+<?php
+$summaryDeptLists = [];
+foreach (['absence' => 'absenteeism', 'tardiness' => 'tardiness', 'vto' => 'vto_tracker'] as $sKey => $sTbl) {
+    try {
+        $sStmt = $pdo->query("SELECT DISTINCT department FROM $sTbl WHERE department IS NOT NULL AND department != '' ORDER BY department");
+        $summaryDeptLists[$sKey] = $sStmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Exception $e) {
+        $summaryDeptLists[$sKey] = [];
+    }
+}
+?>
+<div id="createSummaryModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-opacity opacity-0">
+    <div class="bg-gray-850 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform scale-95 transition-all duration-300 border border-gray-700/50 max-h-[85vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex justify-between items-center px-6 py-5 border-b border-gray-700/50 bg-gray-850 flex-shrink-0">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-file-invoice text-sky-400"></i> Create Summary
+            </h3>
+            <button onclick="closeCreateSummaryModal()" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 bg-gray-800/40 overflow-y-auto custom-scrollbar flex-1">
+            <label for="summaryTypeSelect" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Summary Type</label>
+            <select id="summaryTypeSelect" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-white px-4 py-3 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-sm font-medium mb-5">
+                <option value="absence">Absence Summary</option>
+                <option value="tardiness">Tardiness Summary</option>
+                <option value="vto">VTO Summary</option>
+            </select>
+
+            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Departments</label>
+            <div class="flex items-center justify-between mb-2">
+                <button type="button" id="summarySelectAllDeptBtn" class="text-xs text-sky-400 hover:text-sky-300 font-medium">Select All</button>
+                <button type="button" id="summaryClearDeptBtn" class="text-xs text-gray-500 hover:text-gray-300 font-medium">Clear</button>
+            </div>
+            <div class="bg-gray-900/50 border border-gray-600 rounded-xl p-3 max-h-40 overflow-y-auto custom-scrollbar mb-5 space-y-1.5" id="summaryDeptWrapper">
+                <?php foreach ($summaryDeptLists as $sType => $sDepts): ?>
+                <div class="summary-dept-group <?= $sType === 'absence' ? '' : 'hidden' ?>" data-summary-type="<?= $sType ?>">
+                    <?php if (empty($sDepts)): ?>
+                        <p class="text-xs text-gray-500 px-1 py-1">No departments found.</p>
+                    <?php else: foreach ($sDepts as $sDept): ?>
+                        <label class="flex items-center gap-2.5 px-1 py-1 cursor-pointer hover:bg-white/5 rounded transition-colors text-xs text-gray-300">
+                            <input type="checkbox" class="summary-dept-checkbox rounded border-gray-600 bg-gray-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-0 focus:ring-1" value="<?= htmlspecialchars($sDept) ?>">
+                            <span class="truncate"><?= htmlspecialchars($sDept) ?></span>
+                        </label>
+                    <?php endforeach; endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <p class="text-xs text-gray-500 -mt-3 mb-5">Leave all unchecked to include every department.</p>
+
+            <div class="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                    <label for="summaryDateFrom" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Date From</label>
+                    <input type="date" id="summaryDateFrom" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-white px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-sm">
+                </div>
+                <div>
+                    <label for="summaryDateTo" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Date To</label>
+                    <input type="date" id="summaryDateTo" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-white px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-sm">
+                </div>
+            </div>
+
+            <div id="summaryTimeRangeWrapper" class="grid grid-cols-2 gap-4 mb-2">
+                <div>
+                    <label for="summaryTimeFrom" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Shift Start From</label>
+                    <input type="time" id="summaryTimeFrom" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-white px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-sm">
+                </div>
+                <div>
+                    <label for="summaryTimeTo" class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Shift Start To</label>
+                    <input type="time" id="summaryTimeTo" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-white px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-sm">
+                </div>
+                <p class="text-xs text-gray-500 col-span-2 -mt-2">Filters by the shift's start time (e.g. the "3:00 AM" in "3:00 AM - 11:30 AM").</p>
+            </div>
+
+            <div id="summaryOutputWrapper" class="hidden mt-4">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Generated Summary (<span id="summaryRecordCount">0</span> records)</label>
+                <textarea id="summaryOutputText" readonly rows="10" class="w-full bg-gray-900/50 border border-gray-600 rounded-xl text-gray-200 px-4 py-3 focus:ring-2 focus:ring-sky-500 outline-none transition-all text-xs font-mono custom-scrollbar"></textarea>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-850 px-6 py-4 flex justify-end gap-3 border-t border-gray-700/50 flex-shrink-0">
+            <button onclick="closeCreateSummaryModal()" class="px-5 py-2.5 bg-gray-750 text-gray-300 rounded-xl hover:bg-gray-700 hover:text-white transition-colors border border-gray-600/50 shadow-sm font-medium text-sm">
+                Cancel
+            </button>
+            <button id="summaryGenerateBtn" class="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl shadow-lg shadow-sky-950/20 transition-all flex items-center font-medium text-sm">
+                <i class="fas fa-magic mr-2"></i> Generate
+            </button>
+            <button id="summaryCopyBtn" class="hidden px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-950/20 transition-all flex items-center font-medium text-sm">
+                <i class="fas fa-copy mr-2"></i> Copy
             </button>
         </div>
     </div>

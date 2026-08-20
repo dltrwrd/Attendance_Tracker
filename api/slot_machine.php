@@ -92,13 +92,15 @@ try {
 
         // Pick multiplier (applied once at the end to sum of all cascade wins)
         // 1x = 67%, 2x = 15%, 3x = 10%, 5x = 5%, 10x = 2%, 15x = 1%
-        $randMult = rand(1, 100);
-        if ($randMult <= 67)      $multiplier = 1;
-        elseif ($randMult <= 82)  $multiplier = 2;
-        elseif ($randMult <= 92)  $multiplier = 3;
-        elseif ($randMult <= 97)  $multiplier = 5;
-        elseif ($randMult <= 99)  $multiplier = 10;
-        else                      $multiplier = 15;
+        $randMult = rand(1, 100000);
+        
+        if ($randMult <= 60000)      $multiplier = 1;   // 60.0000%
+        elseif ($randMult <= 74500)  $multiplier = 2;   // 14.5000%
+        elseif ($randMult <= 77200)  $multiplier = 3;   // 2.7000%
+        elseif ($randMult <= 77470)  $multiplier = 5;   // 0.2700%
+        elseif ($randMult <= 77520)  $multiplier = 10;  // 0.0500%
+        elseif ($randMult <= 77550)  $multiplier = 15;  // 0.0300%
+        else                         $multiplier = 0;   // 22.4500% loss
 
         // --- Helper: evaluate wins on a given grid ---
         $evalWins = function(array $grid) use ($symbols, $betSize) {

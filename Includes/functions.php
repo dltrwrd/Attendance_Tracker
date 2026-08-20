@@ -39,6 +39,23 @@ function updateLastActivity() {
     }
 }
 
+// Best-effort, non-blocking ping to the Apps Script Web App so it syncs+fires immediately
+// instead of waiting for its own 1-minute scheduled trigger. Short timeout on purpose --
+// the 1-minute poll is still the fallback if this fails or the request never lands, so we
+// never want a slow/unreachable webhook to hang the admin page.
+function triggerAutoNoteWebhook() {
+    $webhookUrl = "https://script.google.com/a/macros/communixinc.com/s/AKfycbxPl1krazgZgmHzsHx8M7w3y3kZM9et8AzYw5uLgJwU9fPXON9YG76IGsWRjoiIVlub-A/exec";
+    $webhookSecret = "cxi-autonote-fire-9f3a7c2e51";
+
+    $ch = curl_init($webhookUrl . '?secret=' . urlencode($webhookSecret));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 800);
+    curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1500);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    @curl_exec($ch);
+    curl_close($ch);
+}
+
 function logActivity($description, $recordId = null, $recordType = null) {
     global $pdo;
     
