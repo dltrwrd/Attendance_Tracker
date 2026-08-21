@@ -794,6 +794,38 @@ function renderFooter() {
     <audio id="joinSound" src="../assets/join.mp3" preload="auto"></audio>
     <audio id="disconnectSound" src="../assets/disconnect.mp3" preload="auto"></audio>
 
+    <div id="shift-popup" class="fixed bottom-6 right-6 z-50 transform transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] translate-x-[120%] max-w-sm w-full md:w-96">
+        <div class="bg-gray-900/95 backdrop-blur-xl border-l-4 border-amber-500 rounded-xl shadow-2xl shadow-black/50 p-5 relative border-y border-r border-white/10">
+            <button onclick="closeShiftPopup()" class="absolute top-2 right-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full w-7 h-7 flex items-center justify-center transition-colors">
+                <i class="fas fa-times text-xs"></i>
+            </button>
+            <div class="flex items-start">
+                <div class="flex-shrink-0 pt-1">
+                    <div class="bg-amber-500/20 rounded-full p-2.5 border border-amber-500/20 shadow-inner">
+                        <i class="fas fa-exclamation-triangle text-amber-400 text-xl"></i>
+                    </div>
+                </div>
+                <div class="ml-4 w-full pr-4">
+                    <h3 id="shift-popup-title" class="text-white font-bold text-lg tracking-wide">Coverage Pending</h3>
+                    <div class="mt-3 space-y-2">
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-user text-gray-500 w-5 text-center mr-2"></i>
+                            <span id="shift-popup-name" class="text-amber-300 font-semibold truncate"></span>
+                        </div>
+                        <div class="flex items-start text-sm">
+                            <i class="fas fa-exclamation-circle text-gray-500 w-5 text-center mr-2 mt-0.5"></i>
+                            <span id="shift-popup-message" class="text-gray-300"></span>
+                        </div>
+                        <div class="flex items-center text-xs mt-3 text-gray-500 bg-white/5 rounded-md px-2 py-1 w-max">
+                            <i class="far fa-clock mr-1.5"></i>
+                            <span id="shift-popup-shift"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="ticket-popup" class="fixed bottom-6 right-6 z-50 transform transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] translate-x-[120%] max-w-sm w-full md:w-96">
         <div class="bg-gray-900/95 backdrop-blur-xl border-l-4 border-emerald-500 rounded-xl shadow-2xl shadow-black/50 p-5 relative border-y border-r border-white/10">
             <button onclick="closeTicketPopup()" class="absolute top-2 right-2 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full w-7 h-7 flex items-center justify-center transition-colors">
@@ -1352,6 +1384,80 @@ function renderFooter() {
 
         setInterval(monitorVTONotifications, 10000);
         document.addEventListener('DOMContentLoaded', monitorVTONotifications);
+
+        let shownShiftEventKeys = new Set();
+        let shiftPopupFirstLoad = true;
+        let shiftPopupQueue = [];
+        let shiftPopupShowing = false;
+
+        function showShiftPopup(batch) {
+            document.getElementById('shift-popup-title').textContent = batch.type === 'late' ? 'Late Reminder' : 'Absence Reminder';
+
+            if (batch.events.length === 1) {
+                const evt = batch.events[0];
+                document.getElementById('shift-popup-name').textContent = evt.name || '';
+                document.getElementById('shift-popup-message').textContent = evt.message;
+                document.getElementById('shift-popup-shift').textContent = evt.shift ? 'Shift: ' + evt.shift : '';
+            } else {
+                document.getElementById('shift-popup-name').textContent = batch.events.length + ' agents';
+                document.getElementById('shift-popup-message').textContent = batch.events.map(e => e.name).join(', ') + ' — coverage still pending.';
+                document.getElementById('shift-popup-shift').textContent = '';
+            }
+
+            const popup = document.getElementById('shift-popup');
+            if (popup) {
+                popup.classList.remove('translate-x-[120%]');
+                popup.classList.add('translate-x-0');
+            }
+
+            const audio = document.getElementById('notificationSound');
+            if (audio) audio.play().catch(err => console.log("Sound blocked:", err));
+
+            shiftPopupShowing = true;
+            setTimeout(() => {
+                closeShiftPopup();
+                shiftPopupShowing = false;
+                processShiftPopupQueue();
+            }, 10000);
+        }
+
+        function closeShiftPopup() {
+            const popup = document.getElementById('shift-popup');
+            if (popup) {
+                popup.classList.remove('translate-x-0');
+                popup.classList.add('translate-x-[120%]');
+            }
+        }
+
+        function processShiftPopupQueue() {
+            if (shiftPopupShowing || shiftPopupQueue.length === 0) return;
+            showShiftPopup(shiftPopupQueue.shift());
+        }
+
+        async function checkShiftNotifications() {
+            try {
+                const response = await fetch('<?= BASE_URL ?>components/check_shift_notifications.php');
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data.events) return;
+
+                const newEvents = data.events.filter(evt => !shownShiftEventKeys.has(evt.key));
+                newEvents.forEach(evt => shownShiftEventKeys.add(evt.key));
+
+                if (!shiftPopupFirstLoad && newEvents.length > 0) {
+                    const lateEvents = newEvents.filter(e => e.type === 'late');
+                    const absentEvents = newEvents.filter(e => e.type === 'absent');
+                    if (lateEvents.length > 0) shiftPopupQueue.push({ type: 'late', events: lateEvents });
+                    if (absentEvents.length > 0) shiftPopupQueue.push({ type: 'absent', events: absentEvents });
+                }
+
+                shiftPopupFirstLoad = false;
+                processShiftPopupQueue();
+            } catch (error) { }
+        }
+
+        setInterval(checkShiftNotifications, 30000);
+        document.addEventListener('DOMContentLoaded', checkShiftNotifications);
 
         function showTicketPopup(ticket) {
             document.getElementById('popup-name').textContent = ticket.Employee_name || 'Unknown Employee';
