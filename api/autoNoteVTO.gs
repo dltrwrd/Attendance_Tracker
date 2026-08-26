@@ -93,7 +93,9 @@ function addNoteToNotefile(rowNumber) {
     externalSs = SpreadsheetApp.openById(externalSpreadsheetId);
   } catch (e) {
     Logger.log(
-      "addNoteToNotefile row " + rowNumber + ": could not open external spreadsheet. " +
+      "addNoteToNotefile row " +
+        rowNumber +
+        ": could not open external spreadsheet. " +
         e.message,
     );
     return;
@@ -102,7 +104,10 @@ function addNoteToNotefile(rowNumber) {
   var schedfileSheet = externalSs.getSheetByName(externalSheetName);
   if (!schedfileSheet) {
     Logger.log(
-      "addNoteToNotefile row " + rowNumber + ": sheet '" + externalSheetName +
+      "addNoteToNotefile row " +
+        rowNumber +
+        ": sheet '" +
+        externalSheetName +
         "' not found in external spreadsheet.",
     );
     return;
@@ -122,7 +127,8 @@ function addNoteToNotefile(rowNumber) {
 
   if (!name || !dateStrMain) {
     Logger.log(
-      "addNoteToNotefile row " + rowNumber +
+      "addNoteToNotefile row " +
+        rowNumber +
         ": missing Name (Column D) or Date (Column A).",
     );
     return;
@@ -155,8 +161,13 @@ function addNoteToNotefile(rowNumber) {
 
   if (dateColumn === -1) {
     Logger.log(
-      "addNoteToNotefile row " + rowNumber + ": date '" + dateStrMain +
-        "' not found in header row of '" + externalSheetName + "'.",
+      "addNoteToNotefile row " +
+        rowNumber +
+        ": date '" +
+        dateStrMain +
+        "' not found in header row of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -178,8 +189,13 @@ function addNoteToNotefile(rowNumber) {
 
   if (nameRow === -1) {
     Logger.log(
-      "addNoteToNotefile row " + rowNumber + ": Employee ID '" + empId +
-        "' not found in Column A of '" + externalSheetName + "'.",
+      "addNoteToNotefile row " +
+        rowNumber +
+        ": Employee ID '" +
+        empId +
+        "' not found in Column A of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -268,8 +284,15 @@ function addNoteToNotefile(rowNumber) {
   targetCell.setBackground("#00FFFF");
 
   Logger.log(
-    "Note added to cell " + targetCell.getA1Notation() + " in '" +
-      externalSheetName + "' for " + name + " on " + dateStrMain + ".",
+    "Note added to cell " +
+      targetCell.getA1Notation() +
+      " in '" +
+      externalSheetName +
+      "' for " +
+      name +
+      " on " +
+      dateStrMain +
+      ".",
   );
 }
 
@@ -290,7 +313,7 @@ function addCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)
@@ -400,9 +423,11 @@ function addCoverageNote(
   var coverCellWasBlank = !coveringOriginalShift;
 
   var isDSOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+    coverageType &&
+    coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
   var isRDOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("RDOT") !== -1;
+    coverageType &&
+    coverageType.toString().toUpperCase().indexOf("RDOT") !== -1;
 
   // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
   // Strip whitespace before matching -- real data uses "BACK UP" (with a space), which
@@ -526,7 +551,11 @@ function addCoverageNote(
   // paste-format-only (background, font family/size/weight/style/color, alignment, borders,
   // number format) via copyTo, like Ctrl+Alt+V.
   if (vtoAgentCell && (!(isDSOT || isRDOT) || coverCellWasBlank)) {
-    vtoAgentCell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    vtoAgentCell.copyTo(
+      targetCell,
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false,
+    );
   }
 
   var existingNote = targetCell.getNote();

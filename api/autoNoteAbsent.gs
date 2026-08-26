@@ -89,7 +89,9 @@ function addNoteToSchedfile(rowNumber) {
     externalSs = SpreadsheetApp.openById(externalSpreadsheetId);
   } catch (e) {
     Logger.log(
-      "addNoteToSchedfile row " + rowNumber + ": could not open external spreadsheet. " +
+      "addNoteToSchedfile row " +
+        rowNumber +
+        ": could not open external spreadsheet. " +
         e.message,
     );
     return;
@@ -98,7 +100,10 @@ function addNoteToSchedfile(rowNumber) {
   var schedfileSheet = externalSs.getSheetByName(externalSheetName);
   if (!schedfileSheet) {
     Logger.log(
-      "addNoteToSchedfile row " + rowNumber + ": sheet '" + externalSheetName +
+      "addNoteToSchedfile row " +
+        rowNumber +
+        ": sheet '" +
+        externalSheetName +
         "' not found in external spreadsheet.",
     );
     return;
@@ -125,7 +130,8 @@ function addNoteToSchedfile(rowNumber) {
 
   if (!name || !dateStrMain) {
     Logger.log(
-      "addNoteToSchedfile row " + rowNumber +
+      "addNoteToSchedfile row " +
+        rowNumber +
         ": missing Name (Column C) or Date (Column G).",
     );
     return;
@@ -158,8 +164,13 @@ function addNoteToSchedfile(rowNumber) {
 
   if (dateColumn === -1) {
     Logger.log(
-      "addNoteToSchedfile row " + rowNumber + ": date '" + dateStrMain +
-        "' not found in header row of '" + externalSheetName + "'.",
+      "addNoteToSchedfile row " +
+        rowNumber +
+        ": date '" +
+        dateStrMain +
+        "' not found in header row of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -181,8 +192,13 @@ function addNoteToSchedfile(rowNumber) {
 
   if (nameRow === -1) {
     Logger.log(
-      "addNoteToSchedfile row " + rowNumber + ": Employee ID '" + empId +
-        "' not found in Column A of '" + externalSheetName + "'.",
+      "addNoteToSchedfile row " +
+        rowNumber +
+        ": Employee ID '" +
+        empId +
+        "' not found in Column A of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -446,7 +462,7 @@ function addAbsentCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)
@@ -670,7 +686,11 @@ function addAbsentCoverageNote(
   // paste-format-only (background, font family/size/weight/style/color, alignment, borders,
   // number format) via copyTo, like Ctrl+Alt+V.
   if (agent1Cell && (!(isDSOT || isRDOT) || coverCellWasBlank)) {
-    agent1Cell.copyTo(targetCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    agent1Cell.copyTo(
+      targetCell,
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false,
+    );
   }
 
   var existingNote = targetCell.getNote();

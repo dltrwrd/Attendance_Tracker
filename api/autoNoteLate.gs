@@ -93,7 +93,9 @@ function addNoteTofile(rowNumber) {
     externalSs = SpreadsheetApp.openById(externalSpreadsheetId);
   } catch (e) {
     Logger.log(
-      "addNoteTofile row " + rowNumber + ": could not open external spreadsheet. " +
+      "addNoteTofile row " +
+        rowNumber +
+        ": could not open external spreadsheet. " +
         e.message,
     );
     return;
@@ -102,7 +104,10 @@ function addNoteTofile(rowNumber) {
   var schedfileSheet = externalSs.getSheetByName(externalSheetName);
   if (!schedfileSheet) {
     Logger.log(
-      "addNoteTofile row " + rowNumber + ": sheet '" + externalSheetName +
+      "addNoteTofile row " +
+        rowNumber +
+        ": sheet '" +
+        externalSheetName +
         "' not found in external spreadsheet.",
     );
     return;
@@ -131,7 +136,8 @@ function addNoteTofile(rowNumber) {
 
   if (!name || !dateStrMain) {
     Logger.log(
-      "addNoteTofile row " + rowNumber +
+      "addNoteTofile row " +
+        rowNumber +
         ": missing Name (Column C) or Date (Column G).",
     );
     return;
@@ -165,8 +171,13 @@ function addNoteTofile(rowNumber) {
 
   if (dateColumn === -1) {
     Logger.log(
-      "addNoteTofile row " + rowNumber + ": date '" + dateStrMain +
-        "' not found in header row of '" + externalSheetName + "'.",
+      "addNoteTofile row " +
+        rowNumber +
+        ": date '" +
+        dateStrMain +
+        "' not found in header row of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -189,8 +200,13 @@ function addNoteTofile(rowNumber) {
 
   if (nameRow === -1) {
     Logger.log(
-      "addNoteTofile row " + rowNumber + ": Employee ID '" + empId +
-        "' not found in Column A of '" + externalSheetName + "'.",
+      "addNoteTofile row " +
+        rowNumber +
+        ": Employee ID '" +
+        empId +
+        "' not found in Column A of '" +
+        externalSheetName +
+        "'.",
     );
     return;
   }
@@ -291,7 +307,9 @@ function applyRedFontToOwnShiftLine(targetCell, originalShift) {
   var builder = richText
     ? richText.copy()
     : SpreadsheetApp.newRichTextValue().setText(text);
-  var redStyle = SpreadsheetApp.newTextStyle().setForegroundColor("#FF0000").build();
+  var redStyle = SpreadsheetApp.newTextStyle()
+    .setForegroundColor("#FF0000")
+    .build();
   var ownShiftText = originalShift ? originalShift.toString().trim() : "";
 
   var lines = text.split("\n");
@@ -331,7 +349,7 @@ function addLateCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)
@@ -440,7 +458,8 @@ function addLateCoverageNote(
   var coveringOriginalShift = rawCellText;
 
   var isDSOT =
-    coverageType && coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
+    coverageType &&
+    coverageType.toString().toUpperCase().indexOf("DSOT") !== -1;
 
   // BACKUP/AGENT MODE: coverer is just standby, not an extra shift -- leave their value alone.
   // Strip whitespace before matching -- real data uses "BACK UP" (with a space), which
