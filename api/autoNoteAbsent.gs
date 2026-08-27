@@ -70,10 +70,10 @@ function setupAutoFireTriggerAbsent() {
     }
   });
 
-  // Create new time-based trigger to run every 5 minutes
+  // Create new time-based trigger to run every 1 minute (matches Late/VTO fallback cadence)
   ScriptApp.newTrigger("checkForFireTriggersAbsent")
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(1)
     .create();
 }
 
