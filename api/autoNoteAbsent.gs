@@ -70,10 +70,10 @@ function setupAutoFireTriggerAbsent() {
     }
   });
 
-  // Create new time-based trigger to run every 1 minute (matches Late/VTO fallback cadence)
+  // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersAbsent")
     .timeBased()
-    .everyMinutes(1)
+    .everyMinutes(5)
     .create();
 }
 
@@ -462,7 +462,7 @@ function addAbsentCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)

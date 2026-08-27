@@ -313,7 +313,7 @@ function addCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)
