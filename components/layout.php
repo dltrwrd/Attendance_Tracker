@@ -321,10 +321,12 @@ function renderNavbar() {
     
     if (!isset($_SESSION['display_photo']) && isset($_SESSION['user_id'])) {
         try {
-            $stmt = $pdo->prepare("SELECT display_photo FROM users WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT display_photo, username, fullname FROM users WHERE id = ?");
             $stmt->execute([$_SESSION['user_id']]);
             $userRow = $stmt->fetch(PDO::FETCH_ASSOC);
             $_SESSION['display_photo'] = $userRow['display_photo'] ?? '';
+            $_SESSION['username'] = $_SESSION['username'] ?? ($userRow['username'] ?? '');
+            $_SESSION['fullname'] = $_SESSION['fullname'] ?? ($userRow['fullname'] ?? '');
         } catch (Exception $e) {
             error_log("Error fetching user photo: " . $e->getMessage());
         }
@@ -334,6 +336,43 @@ function renderNavbar() {
         ? '../components/profile/' . $_SESSION['display_photo'] 
         : '../components/profile/default.jpg';
     ?>
+    <script>
+        // Runs once per fresh login: consumes the "remember this browser" / "keep me logged in"
+        // intent that index.php stashed in sessionStorage right before the login POST. This is
+        // the only place either feature actually takes effect, since it's the first
+        // authenticated page load after a successful sign-in.
+        (function() {
+            const PENDING_INTENT_KEY = 'cxi_pending_remember';
+            const PROFILE_STORAGE_KEY = 'cxi_remembered_profiles';
+            let intent;
+            try { intent = JSON.parse(sessionStorage.getItem(PENDING_INTENT_KEY) || 'null'); } catch (e) { intent = null; }
+            if (!intent) return;
+            sessionStorage.removeItem(PENDING_INTENT_KEY); // one-time use
+
+            const currentUser = {
+                user_id: <?= json_encode((int)($_SESSION['user_id'] ?? 0)) ?>,
+                username: <?= json_encode($_SESSION['username'] ?? '') ?>,
+                fullname: <?= json_encode($_SESSION['fullname'] ?? '') ?>,
+                display_photo: <?= json_encode($_SESSION['display_photo'] ?? '') ?>,
+            };
+
+            if (intent.remember_browser && currentUser.user_id) {
+                let profiles = [];
+                try { profiles = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY)) || []; } catch (e) { profiles = []; }
+                profiles = profiles.filter(p => p.user_id !== currentUser.user_id);
+                profiles.unshift(currentUser);
+                localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles.slice(0, 8)));
+            }
+
+            if (intent.keep_logged_in) {
+                fetch('<?= BASE_URL ?>components/remember_me_actions.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=issue'
+                }).catch(() => {});
+            }
+        })();
+    </script>
     <nav class="bg-gray-900/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-30 transition-all shadow-sm">
         <div class="px-4 py-3 flex justify-between items-center">
             
@@ -390,9 +429,14 @@ function renderNavbar() {
                     <div id="notificationDropdown" class="hidden absolute right-0 mt-3 w-80 sm:w-96 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden transform origin-top-right transition-all">
                         <div class="flex justify-between items-center px-4 py-3 border-b border-white/10 bg-gray-800/50">
                             <h3 class="text-white font-bold tracking-wide">Notifications</h3>
-                            <button onclick="clearAllNotifications()" class="text-xs text-red-400 hover:text-red-300 font-medium bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded transition-colors" title="Clear all notifications from database">
-                                Clear All
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="markAllNotificationsRead()" class="text-xs text-gray-300 hover:text-white font-medium bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors" title="Mark everything as read">
+                                    Mark all read
+                                </button>
+                                <button onclick="clearAllNotifications()" class="text-xs text-red-400 hover:text-red-300 font-medium bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded transition-colors" title="Clear all notifications from database">
+                                    Clear All
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Tabs -->
@@ -1258,35 +1302,110 @@ function renderFooter() {
             }
         }
 
+        // Category -> { icon, color } used to visually distinguish notification sources.
+        const NOTIF_CATEGORY_META = {
+            vto_email:     { icon: 'fa-envelope-open-text', color: 'purple' },
+            shift_absent:  { icon: 'fa-user-slash',         color: 'red' },
+            shift_late:    { icon: 'fa-clock',               color: 'amber' },
+            pending_email: { icon: 'fa-envelope',            color: 'blue' },
+            pending_ir:    { icon: 'fa-file-signature',      color: 'orange' },
+            pending_fire:  { icon: 'fa-fire',                color: 'red' },
+        };
+
+        function notifMeta(notif) {
+            return NOTIF_CATEGORY_META[notif.category] || { icon: 'fa-bell', color: 'purple' };
+        }
+
+        // Send-email and Trigger-fire are one-way actions triggered straight from the
+        // notification dropdown. Confirm once here, then submit as POST directly — instead of
+        // navigating via GET, which would just land on a second confirmation page server-side.
+        function confirmQuickAction(event, category, actionUrl) {
+            event.preventDefault();
+            event.stopPropagation();
+            const messages = {
+                pending_email: 'Send the infraction email for this record now?',
+                pending_fire: 'Trigger fire/autonote for this record now? This cannot be undone.',
+            };
+            if (!confirm(messages[category] || 'Are you sure?')) return false;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = actionUrl;
+            document.body.appendChild(form);
+            form.submit();
+            return false;
+        }
+
         function createNotifHTML(notif, isUnread) {
             const bgClass = isUnread ? 'bg-purple-500/5 hover:bg-purple-500/10' : 'hover:bg-gray-800 border-transparent';
             const borderClass = isUnread ? 'border-l-4 border-purple-500 border-y border-r border-white/5' : 'border-b border-gray-800';
-            const iconColor = isUnread ? 'text-purple-400' : 'text-gray-500';
             const textColor = isUnread ? 'text-gray-200' : 'text-gray-400';
-            
+            const meta = notifMeta(notif);
+            const iconColor = isUnread ? `text-${meta.color}-400` : 'text-gray-500';
+            const badgeBg = isUnread ? `bg-${meta.color}-500/20` : 'bg-gray-800';
+
+            const groupBadge = parseInt(notif.is_group) === 1 && notif.group_count
+                ? `<span class="ml-2 inline-flex items-center justify-center text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-${meta.color}-500/20 text-${meta.color}-300">${notif.group_count}</span>`
+                : '';
+
+            // Quick actions only make sense for a single actionable record (not grouped summaries,
+            // not plain VTO-email inbox items) that actually has a mutating action_url.
+            let actionsHTML = '';
+            if (parseInt(notif.is_group) !== 1 && notif.action_url && notif.category !== 'vto_email') {
+                const actionLabel = notif.category === 'pending_email' ? 'Send' :
+                                     notif.category === 'pending_fire' ? 'Trigger' :
+                                     notif.category === 'pending_ir' ? 'Edit' : 'View';
+                // Sending an email or triggering fire are one-way actions, so confirm first.
+                // Edit just navigates to the record — no confirmation needed.
+                const needsConfirm = notif.category === 'pending_email' || notif.category === 'pending_fire';
+                const clickHandler = needsConfirm
+                    ? `return confirmQuickAction(event, '${notif.category}', '${notif.action_url}');`
+                    : `event.stopPropagation();`;
+                actionsHTML = `
+                    <div class="flex items-center gap-2 mt-2">
+                        <a href="${notif.action_url}" onclick="${clickHandler}" class="text-[11px] font-bold uppercase tracking-wide text-${meta.color}-400 hover:text-${meta.color}-300 bg-${meta.color}-500/10 hover:bg-${meta.color}-500/20 px-2 py-1 rounded transition-colors">
+                            ${actionLabel}
+                        </a>
+                        <button onclick="event.stopPropagation(); markAsRead(${notif.id});" class="text-[11px] font-bold uppercase tracking-wide text-gray-400 hover:text-gray-200 bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors">
+                            Read
+                        </button>
+                    </div>`;
+            }
+
             return `
-                <div class="p-3 cursor-pointer transition-colors ${bgClass} ${borderClass} group" onclick="openVtoPreview(${notif.id})">
+                <div class="p-3 cursor-pointer transition-colors ${bgClass} ${borderClass} group" onclick="openNotifPreview(${notif.id})">
                     <div class="flex gap-3 items-start">
                         <div class="mt-1">
-                            <div class="${isUnread ? 'bg-purple-500/20' : 'bg-gray-800'} rounded-full p-2">
-                                <i class="fas fa-envelope-open-text ${iconColor} text-sm"></i>
+                            <div class="${badgeBg} rounded-full p-2">
+                                <i class="fas ${meta.icon} ${iconColor} text-sm"></i>
                             </div>
                         </div>
                         <div class="flex-1 overflow-hidden">
-                            <p class="${textColor} text-sm font-medium leading-snug line-clamp-2">${notif.subject}</p>
+                            <p class="${textColor} text-sm font-medium leading-snug line-clamp-2">${notif.subject}${groupBadge}</p>
                             <div class="flex items-center justify-between mt-2">
                                 <p class="text-xs text-gray-500 font-mono">${formatNotifTime(notif.created_at)}</p>
                                 <span class="text-[10px] uppercase font-bold text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">Click to view</span>
                             </div>
+                            ${actionsHTML}
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        function openVtoPreview(id) {
+        function openNotifPreview(id) {
             const notif = currentNotifications.find(n => parseInt(n.id) === parseInt(id));
             if (!notif) return;
+
+            // Grouped summaries and pending-action items jump straight to the relevant tab
+            // instead of opening the VTO-style preview modal. link_url is ALWAYS a safe,
+            // read-only "go look at this" destination — it is never send_email.php or the
+            // fire-trigger endpoint. Those mutating actions only ever live on the dedicated
+            // Send/Trigger button (action_url), gated behind its own confirmation.
+            if (parseInt(notif.is_group) === 1 || (notif.link_url && notif.category !== 'vto_email')) {
+                if (parseInt(notif.is_read) === 0) markAsRead(id);
+                if (notif.link_url) window.location.href = notif.link_url;
+                return;
+            }
 
             document.getElementById('vtoPreviewSubject').textContent = notif.subject;
             document.getElementById('vtoPreviewTime').textContent = formatNotifTime(notif.created_at);
@@ -1317,14 +1436,25 @@ function renderFooter() {
                     currentNotifications[notifIndex].is_read = 1;
                     renderInbox();
                 }
-                await fetch(`<?= BASE_URL ?>components/fetch_notifications.php?action=mark_read&id=${id}`);
+                // Marking read is persisted server-side keyed by the notification's stable
+                // event_key, so it will not be reminded again while the underlying condition
+                // (still late, still uncovered, still pending, etc.) is unchanged.
+                await fetch(`<?= BASE_URL ?>components/notifications_aggregator.php?action=mark_read&id=${id}`);
             } catch (error) { console.error('Failed to mark read:', error); }
         }
 
-        async function clearAllNotifications() {
-            if (!confirm("Are you sure you want to clear all VTO notifications? This will delete them from the database.")) return;
+        async function markAllNotificationsRead() {
             try {
-                const response = await fetch('<?= BASE_URL ?>components/fetch_notifications.php?action=clear_all');
+                currentNotifications.forEach(n => n.is_read = 1);
+                renderInbox();
+                await fetch(`<?= BASE_URL ?>components/notifications_aggregator.php?action=mark_all_read`);
+            } catch (error) { console.error('Failed to mark all read:', error); }
+        }
+
+        async function clearAllNotifications() {
+            if (!confirm("Are you sure you want to clear all notifications? This will delete them from the database.")) return;
+            try {
+                const response = await fetch('<?= BASE_URL ?>components/notifications_aggregator.php?action=clear_all');
                 const data = await response.json();
                 if (data.success) {
                     currentNotifications = [];
@@ -1354,9 +1484,12 @@ function renderFooter() {
 
         let highestNotifId = localStorage.getItem('cxi_last_vto_notif_id') || 0;
 
-        async function monitorVTONotifications() {
+        // Polls the unified notification center (VTO emails, shift reminders, and pending
+        // email/IR/fire items for Absenteeism, Tardiness & VTO). Only genuinely new, unread
+        // items trigger the toast + sound; everything renders into the bell dropdown regardless.
+        async function monitorNotifications() {
             try {
-                const response = await fetch('<?= BASE_URL ?>components/fetch_notifications.php');
+                const response = await fetch('<?= BASE_URL ?>components/notifications_aggregator.php');
                 if (!response.ok) return;
                 
                 const data = await response.json();
@@ -1371,8 +1504,10 @@ function renderFooter() {
                         const latest = newUnread[0];
                         const audio = document.getElementById('vtoNotificationSound');
                         if (audio) audio.play().catch(err => console.log("Sound autoplay blocked:", err));
-                        
-                        showVtoPopup(latest.subject);
+
+                        if (latest.category === 'vto_email') {
+                            showVtoPopup(latest.subject);
+                        }
 
                         const maxId = Math.max(...newUnread.map(n => parseInt(n.id)));
                         highestNotifId = maxId;
@@ -1382,8 +1517,8 @@ function renderFooter() {
             } catch (error) { }
         }
 
-        setInterval(monitorVTONotifications, 10000);
-        document.addEventListener('DOMContentLoaded', monitorVTONotifications);
+        setInterval(monitorNotifications, 10000);
+        document.addEventListener('DOMContentLoaded', monitorNotifications);
 
         let shownShiftEventKeys = new Set();
         let shiftPopupFirstLoad = true;
@@ -1400,7 +1535,8 @@ function renderFooter() {
                 document.getElementById('shift-popup-shift').textContent = evt.shift ? 'Shift: ' + evt.shift : '';
             } else {
                 document.getElementById('shift-popup-name').textContent = batch.events.length + ' agents';
-                document.getElementById('shift-popup-message').textContent = batch.events.map(e => e.name).join(', ') + ' — coverage still pending.';
+                const batchSuffix = batch.type === 'late' ? ' — still marked late.' : ' — coverage still pending.';
+                document.getElementById('shift-popup-message').textContent = batch.events.map(e => e.name).join(', ') + batchSuffix;
                 document.getElementById('shift-popup-shift').textContent = '';
             }
 

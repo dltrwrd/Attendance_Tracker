@@ -1,5 +1,7 @@
 <?php
-session_start(); // Add session_start() at the beginning
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/functions.php';
@@ -21,7 +23,58 @@ if (isset($_GET['send_email']) && isset($_GET['type'])) {
         $returnUrl = $_GET['return_url'];
     }
 
-    // Check if currently processing (Prevent double execution)
+    // Validate type early, before doing anything else.
+    if (!in_array($type, ['tardiness', 'absenteeism'])) {
+        die('Invalid type');
+    }
+
+    // SAFETY GATE: never send on a bare GET. GET requests can be triggered by things that
+    // aren't the user deliberately clicking "Send" in the dashboard — a link preview, a
+    // browser prefetching a hovered link, or (as happened) simply clicking the URL text while
+    // browsing the global_notifications table in phpMyAdmin. Only an explicit POST — submitted
+    // from the confirmation form below, or from the dashboard's own confirm dialog — is allowed
+    // to actually send. A GET just shows this confirmation page; nothing happens until someone
+    // deliberately clicks the button on it.
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Confirm Send Email</title>
+            <style>
+                body { font-family: system-ui, sans-serif; background:#0f172a; color:#e2e8f0; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+                .box { background:#1e293b; border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:28px 32px; max-width:380px; text-align:center; }
+                h2 { margin-top:0; font-size:18px; }
+                p { color:#94a3b8; font-size:14px; }
+                .actions { display:flex; gap:10px; margin-top:20px; justify-content:center; }
+                button, a.cancel { padding:10px 18px; border-radius:8px; font-weight:600; font-size:14px; text-decoration:none; border:none; cursor:pointer; }
+                button { background:#0ea5e9; color:#fff; }
+                a.cancel { background:rgba(255,255,255,.08); color:#e2e8f0; display:inline-flex; align-items:center; }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h2>Send infraction email?</h2>
+                <p>This will immediately email the <?= htmlspecialchars($type) ?> record #<?= (int)$id ?>. This cannot be undone from here.</p>
+                <form method="POST" style="display:inline;">
+                    <input type="hidden" name="send_email" value="<?= (int)$id ?>">
+                    <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
+                    <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl) ?>">
+                    <div class="actions">
+                        <a class="cancel" href="<?= htmlspecialchars($returnUrl) ?>">Cancel</a>
+                        <button type="submit">Yes, send it</button>
+                    </div>
+                </form>
+            </div>
+        </body>
+        </html>
+        <?php
+        exit();
+    }
+
+    // From this point on, we only ever reach here via a deliberate POST submission.
+
     $session_key = 'email_processing_' . $type . '_' . $id;
     if (isset($_SESSION[$session_key]) && $_SESSION[$session_key] > time() - 30) {
         die('Email is already being sent. Please wait a moment before trying again.');

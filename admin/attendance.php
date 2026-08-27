@@ -8,7 +8,6 @@ if (!isLoggedIn() || !isAdmin()) {
 
 updateLastActivity();
 
-// Store the current URL so external pages (like Edit Record or Send Email) can redirect back here preserving filters
 $_SESSION['attendance_return_url'] = $_SERVER['REQUEST_URI'];
 
 // ==========================================
@@ -39,7 +38,7 @@ function buildCoverageText($row) {
 
 function buildSummaryText($summaryType, $rows) {
     $titleMap = [
-        'absence'    => 'ABSENCE SUMMARY',
+        'absence'    => 'UPDATED PENDING COVERAGE SUMMARY',
         'tardiness'  => 'TARDINESS SUMMARY',
         'vto'        => 'VTO SUMMARY',
     ];
@@ -63,10 +62,10 @@ function buildSummaryText($summaryType, $rows) {
             $coverage = buildCoverageText($row);
 
             $blocks[] = "{$sanction}\n"
-                      . "Name of Employee: {$fullName}\n"
-                      . "DEPARTMENT: {$department}\n"
-                      . "Scheduled Shift: {$shift}\n"
-                      . "Covered/Uncovered?: {$coverage}";
+                      . "Name: {$fullName}\n"
+                      . "LOB: *{$department}*\n"
+                      . "Shift: {$shift}\n"
+                      . "Covered/Uncovered?: *{$coverage}*";
         } elseif ($summaryType === 'tardiness') {
             $lateType = strtoupper(trim($row['types'] ?? ''));
             if ($lateType === '') $lateType = 'LATE';
@@ -74,17 +73,17 @@ function buildSummaryText($summaryType, $rows) {
             if ($minutesLate === '') $minutesLate = '0';
 
             $blocks[] = "{$lateType}\n"
-                      . "Name of Employee: {$fullName}\n"
-                      . "DEPARTMENT: {$department}\n"
-                      . "Scheduled Shift: {$shift}\n"
-                      . "Minutes late: {$minutesLate} minutes late";
+                      . "Name: {$fullName}\n"
+                      . "LOB: {$department}\n"
+                      . "Shift: {$shift}\n"
+                      . "Minutes late: *{$minutesLate}* minutes late";
         } elseif ($summaryType === 'vto') {
             $vtoType = strtoupper(trim($row['vto_type'] ?? ''));
 
-            $blocks[] = "Name of Employee: {$fullName}\n"
-                      . "DEPARTMENT: {$department}\n"
-                      . "Scheduled Shift: {$shift}\n"
-                      . "VTO Type: {$vtoType}";
+            $blocks[] = "Name: {$fullName}\n"
+                      . "LOB: {$department}\n"
+                      . "Shift: {$shift}\n"
+                      . "VTO Type: *{$vtoType}*";
         }
     }
 
@@ -340,13 +339,13 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'generate_report') {
             $greeting = "Good evening";
         }
 
-        $output = "{$greeting} boss @⁨Phay Briones-Barrameda⁩, here is the Coverage Summary for {$formattedDate} as of {$formattedTime}:\n\n";
+        $output = "{$greeting} boss @⁨Phay Briones-Barrameda⁩\nHere is the Coverage Summary for *{$formattedDate} as of {$formattedTime}*:\n\n";
 
         if (empty($reportData)) {
             $output .= "No absences recorded for " . $dateObj->format('m/d/Y') . ".";
         } else {
             foreach ($reportData as $om => $data) {
-                $output .= "OM  " . strtoupper($om) . " - " . $data['covered'] . "/" . $data['total'] . " COVERED SHIFT\n";
+                $output .= "*OM  " . strtoupper($om) . " - " . $data['covered'] . "/" . $data['total'] . " COVERED SHIFT*\n";
                 
                 foreach ($data['lobs'] as $lob => $counts) {
                     $lobLine = strtoupper($lob);
@@ -362,7 +361,7 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'generate_report') {
                 $output .= "\n";
             }
             
-            $output .= "Total Absences: " . $totalAbsences . " \n";
+            $output .= "Total Absences: *" . $totalAbsences . "* \n";
             
             $footerParts = [];
             if ($totalPending > 0) {
@@ -370,7 +369,7 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'generate_report') {
                 $footerParts[] = $totalPending . " Pending Coverages for " . $lobNames;
             }
             if ($totalUncovered > 0) {
-                $footerParts[] = $totalUncovered . " UNCOVERED SHIFT";
+                $footerParts[] = $totalUncovered . " *UNCOVERED SHIFT*";
             }
             
             if (!empty($footerParts)) {
@@ -963,6 +962,8 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
             <?php if (!empty($_GET['from'])): ?><input type="hidden" name="from" value="<?= htmlspecialchars($_GET['from']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['to'])): ?><input type="hidden" name="to" value="<?= htmlspecialchars($_GET['to']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['dept'])): ?><input type="hidden" name="dept" value="<?= htmlspecialchars($_GET['dept']) ?>"><?php endif; ?>
+            <?php if (!empty($_GET['shift'])): ?><input type="hidden" name="shift" value="<?= htmlspecialchars($_GET['shift']) ?>"><?php endif; ?>
+            <?php if (!empty($_GET['om'])): ?><input type="hidden" name="om" value="<?= htmlspecialchars($_GET['om']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['cov'])): ?><input type="hidden" name="cov" value="<?= htmlspecialchars($_GET['cov']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['ir'])): ?><input type="hidden" name="ir" value="<?= htmlspecialchars($_GET['ir']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['filter'])): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($_GET['filter']) ?>"><?php endif; ?>
@@ -993,8 +994,8 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
             </div>
             
             <div class="overflow-x-auto">
-            <div class="grid gap-4 items-center" style="grid-template-columns: 2fr 1.2fr 1.2fr 1.5fr <?= ($currentTab !== 'vto') ? '1.5fr ' : '' ?>1.8fr auto; min-width: 1000px;">   
-                <div class="relative">
+            <div class="flex flex-wrap gap-4 items-center">
+                <div class="relative flex-1 min-w-[220px]">
                     <input type="text" id="searchInput" 
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         placeholder="Search employee ID or name..."
@@ -1002,54 +1003,59 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                     <div class="absolute left-3 top-3 text-gray-500"><i class="fas fa-search"></i></div>
                 </div>
                 
-                <div class="relative">
+                <div class="relative w-44">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><i class="fas fa-calendar-alt"></i></div>
                     <input type="date" id="dateFrom" title="Date From"
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         value="<?= isset($_GET['from']) ? htmlspecialchars($_GET['from']) : '' ?>">
                 </div>
-                <div class="relative">
+                <div class="relative w-44">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><i class="fas fa-calendar-check"></i></div>
                     <input type="date" id="dateTo" title="Date To"
                         class="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm"
                         value="<?= isset($_GET['to']) ? htmlspecialchars($_GET['to']) : '' ?>">
                 </div>
-                
-                <div class="relative">
-                    <select id="departmentFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm">
-                        <option value="">All Departments</option>
-                        <?php
-                        $deptDateFrom = isset($_GET['from']) ? $_GET['from'] : '';
-                        $deptDateTo   = isset($_GET['to'])   ? $_GET['to']   : '';
-                        $deptTable    = ($currentTab === 'tardiness') ? 'tardiness' : (($currentTab === 'absenteeism') ? 'absenteeism' : null);
-                        if ($deptTable) {
-                            $deptDateField = ($currentTab === 'tardiness') ? 'date_of_incident' : 'date_of_absent';
-                            $deptWhere  = [];
-                            $deptParams = [];
-                            if (!empty($deptDateFrom)) { $deptWhere[] = "$deptDateField >= :df"; $deptParams[':df'] = $deptDateFrom; }
-                            if (!empty($deptDateTo))   { $deptWhere[] = "$deptDateField <= :dt"; $deptParams[':dt'] = $deptDateTo; }
-                            $deptSql = "SELECT DISTINCT department FROM $deptTable" . (!empty($deptWhere) ? ' WHERE ' . implode(' AND ', $deptWhere) : '') . " ORDER BY department";
-                            $deptStmt = $pdo->prepare($deptSql);
-                            foreach ($deptParams as $k => $v) { $deptStmt->bindValue($k, $v); }
-                            $deptStmt->execute();
-                            while ($row = $deptStmt->fetch()) {
-                                $selected = (isset($_GET['dept']) && $_GET['dept'] === $row['department']) ? 'selected' : '';
-                                echo '<option value="'.htmlspecialchars($row['department']).'" '.$selected.'>'.htmlspecialchars($row['department']).'</option>';
-                            }
-                        } else {
-                            $stmt = $pdo->query("SELECT DISTINCT department FROM absenteeism UNION SELECT DISTINCT department FROM tardiness ORDER BY department");
-                            while ($row = $stmt->fetch()) {
-                                $selected = (isset($_GET['dept']) && $_GET['dept'] === $row['department']) ? 'selected' : '';
-                                echo '<option value="'.htmlspecialchars($row['department']).'" '.$selected.'>'.htmlspecialchars($row['department']).'</option>';
-                            }
-                        }
-                        ?>
-                    </select>
-                    <div class="absolute right-3 top-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down text-xs"></i></div>
-                </div>
-                
+
+                <?php
+                // Google-Sheets-style multi-select column filter dropdowns: Department, Shift,
+                // Operations Manager. Options are fetched live (partials/attendance_filter_options.php)
+                // so each dropdown only ever shows values that actually exist in the current filtered
+                // view — cascading against whatever else is already selected.
+                function renderColumnFilterDropdown($col, $label, $icon, $hidden = false) {
+                    ?>
+                    <div class="relative z-[90] w-48 <?= $hidden ? 'hidden' : '' ?>" id="<?= $col ?>FilterWrapper">
+                        <button type="button" id="<?= $col ?>FilterBtn"
+                            class="glass-input w-full px-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm flex items-center justify-between gap-2"
+                            onclick="toggleColumnFilter('<?= $col ?>', event)">
+                            <span class="flex items-center gap-2 truncate">
+                                <i class="fas <?= $icon ?> text-gray-500 text-xs"></i>
+                                <span id="<?= $col ?>FilterLabel" class="truncate text-gray-300">All <?= $label ?></span>
+                            </span>
+                            <i class="fas fa-chevron-down text-gray-500 text-xs flex-shrink-0 transition-transform duration-200" id="<?= $col ?>FilterChevron"></i>
+                        </button>
+                        <div id="<?= $col ?>FilterDropdown" class="hidden bg-gray-900 border border-gray-700/60 rounded-xl shadow-2xl overflow-hidden absolute mt-1" style="min-width:240px;">
+                            <div class="px-3 pt-3 pb-2 border-b border-gray-700/40">
+                                <input type="text" placeholder="Search <?= strtolower($label) ?>..."
+                                    class="w-full bg-gray-800/60 border border-gray-700/50 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:ring-1 focus:ring-primary-500"
+                                    oninput="filterColumnOptions('<?= $col ?>', this.value)">
+                            </div>
+                            <div id="<?= $col ?>OptionsList" class="overflow-y-auto custom-scrollbar py-1" style="max-height:220px;">
+                                <p class="text-xs text-gray-500 px-4 py-3">Loading...</p>
+                            </div>
+                            <div class="px-3 py-2 border-t border-gray-700/40 flex justify-between items-center">
+                                <span id="<?= $col ?>SelCount" class="text-xs text-gray-500">0 selected</span>
+                                <button type="button" onclick="clearColumnFilter('<?= $col ?>')" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <?php
+                }
+                renderColumnFilterDropdown('department', 'Departments', 'fa-building');
+                renderColumnFilterDropdown('shift', 'Shifts', 'fa-clock');
+                renderColumnFilterDropdown('om', 'Operations Managers', 'fa-user-tie', $currentTab === 'vto');
+                ?>
                 <?php if ($currentTab !== 'vto'): ?>
-                <div class="relative">
+                <div class="relative w-40">
                     <select id="coverageFilter" class="glass-input w-full px-4 py-2.5 rounded-xl appearance-none shadow-inner transition-colors duration-200 text-sm">
                         <option value="">All Coverage</option>
                         <?php
@@ -1064,7 +1070,7 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                 </div>
                 <?php endif; ?>
 
-                <div class="relative z-[100] <?= ($currentTab === 'vto') ? 'opacity-50 cursor-not-allowed' : '' ?>" id="irFilterWrapper">
+                <div class="relative z-[80] w-52 <?= ($currentTab === 'vto') ? 'opacity-50 cursor-not-allowed' : '' ?>" id="irFilterWrapper">
                     <!-- Trigger Button -->
                     <button type="button" id="irFilterBtn" <?= ($currentTab === 'vto') ? 'disabled' : '' ?>
                         class="glass-input w-full px-4 py-2.5 rounded-xl shadow-inner transition-colors duration-200 text-sm flex items-center justify-between gap-2"
@@ -1158,7 +1164,7 @@ $currentTab = isset($_GET['tab']) ? $_GET['tab'] : 'absenteeism';
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-2 shrink-0">
+                <div class="flex justify-end gap-2 shrink-0 ml-auto">
                     <button type="button" onclick="exportToCsv()" class="px-4 py-2.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/40 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 text-sm font-medium shadow-inner">
                         <i class="fas fa-file-csv"></i> Export CSV
                     </button>
@@ -1409,6 +1415,171 @@ function clearIrFilter() {
     if (typeof window._irHandleDropdown === 'function') window._irHandleDropdown();
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// Google-Sheets-style multi-select column filters: Department / Shift / Operations Manager.
+// Each dropdown fetches its option list live from partials/attendance_filter_options.php,
+// which computes distinct values considering every OTHER filter currently active — so the
+// list always reflects only what's actually present in the current filtered view.
+// ────────────────────────────────────────────────────────────────────────
+const COLUMN_FILTER_KEYS = ['department', 'shift', 'om'];
+const columnFilters = { department: [], shift: [], om: [] };
+const COLUMN_FILTER_LABELS = { department: 'Departments', shift: 'Shifts', om: 'Operations Managers' };
+// Shared with the DOMContentLoaded handler below (which does NOT redeclare this with let/const,
+// so assignments there resolve to this same module-scope variable).
+let currentFilter = '';
+
+function positionColumnDropdown(col) {
+    const btn = document.getElementById(col + 'FilterBtn');
+    const dd = document.getElementById(col + 'FilterDropdown');
+    if (!btn || !dd) return;
+    const rect = btn.getBoundingClientRect();
+    const scrollY = window.scrollY || window.pageYOffset;
+    const scrollX = window.scrollX || window.pageXOffset;
+    dd.style.position = 'absolute';
+    dd.style.top = (rect.bottom + scrollY + 4) + 'px';
+    dd.style.left = (rect.left + scrollX) + 'px';
+    dd.style.width = Math.max(rect.width, 240) + 'px';
+    dd.style.zIndex = '99999';
+}
+
+function closeAllColumnDropdowns() {
+    COLUMN_FILTER_KEYS.forEach(col => {
+        const dd = document.getElementById(col + 'FilterDropdown');
+        const chevron = document.getElementById(col + 'FilterChevron');
+        if (dd) dd.classList.add('hidden');
+        if (chevron) chevron.style.transform = '';
+    });
+}
+
+function toggleColumnFilter(col, e) {
+    e.stopPropagation();
+    const dd = document.getElementById(col + 'FilterDropdown');
+    const chevron = document.getElementById(col + 'FilterChevron');
+    if (!dd) return;
+    const isHidden = dd.classList.contains('hidden');
+
+    // Close any other open dropdown (other column filters + the IR one) first.
+    closeAllColumnDropdowns();
+    const irDd = document.getElementById('irFilterDropdown');
+    const irChevron = document.getElementById('irFilterChevron');
+    if (irDd) irDd.classList.add('hidden');
+    if (irChevron) irChevron.style.transform = '';
+
+    if (isHidden) {
+        // Teleport to body so the toolbar's overflow-x-auto / backdrop-filter never clips it.
+        if (dd.parentElement !== document.body) document.body.appendChild(dd);
+        dd.classList.remove('hidden');
+        positionColumnDropdown(col);
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        loadColumnOptions(col);
+        const searchBox = dd.querySelector('input[type="text"]');
+        if (searchBox) { searchBox.value = ''; searchBox.focus(); }
+    }
+}
+
+function loadColumnOptions(col) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const formData = new FormData();
+    const searchEl = document.getElementById('searchInput');
+    const dateFromEl = document.getElementById('dateFrom');
+    const dateToEl = document.getElementById('dateTo');
+    const coverageEl = document.getElementById('coverageFilter');
+
+    formData.append('column', col);
+    formData.append('type', urlParams.get('tab') || 'absenteeism');
+    formData.append('search', searchEl ? searchEl.value : '');
+    formData.append('date_from', dateFromEl ? dateFromEl.value : '');
+    formData.append('date_to', dateToEl ? dateToEl.value : '');
+    if (coverageEl) formData.append('coverage_1', coverageEl.value);
+    const irVals = getSelectedIrValues().join(',');
+    if (irVals) formData.append('ir_filter', irVals);
+    if (currentFilter) formData.append('filter', currentFilter);
+    // Cascade against the OTHER column filters currently selected (never the one being opened).
+    COLUMN_FILTER_KEYS.forEach(c => {
+        if (c !== col) columnFilters[c].forEach(v => formData.append(c + '[]', v));
+    });
+
+    const list = document.getElementById(col + 'OptionsList');
+    if (list) list.innerHTML = '<p class="text-xs text-gray-500 px-4 py-3">Loading...</p>';
+
+    fetch('partials/attendance_filter_options.php', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => renderColumnOptions(col, (data && data.options) || []))
+        .catch(() => { if (list) list.innerHTML = '<p class="text-xs text-gray-500 px-4 py-3">Failed to load.</p>'; });
+}
+
+function renderColumnOptions(col, options) {
+    const list = document.getElementById(col + 'OptionsList');
+    if (!list) return;
+    if (!options.length) {
+        list.innerHTML = '<p class="text-xs text-gray-500 px-4 py-3">No values found for the current filters.</p>';
+        return;
+    }
+    list.innerHTML = options.map(opt => {
+        const safeVal = String(opt.value).replace(/"/g, '&quot;');
+        const checked = columnFilters[col].includes(opt.value) ? 'checked' : '';
+        return `<label class="col-filter-option flex items-center justify-between gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-white/5 rounded transition-colors text-xs text-gray-300" data-label="${safeVal.toLowerCase()}">
+                    <span class="flex items-center gap-2.5 truncate">
+                        <input type="checkbox" class="col-filter-checkbox rounded border-gray-600 bg-gray-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0 focus:ring-1" value="${safeVal}" ${checked} onchange="toggleColumnValue('${col}', this)">
+                        <span class="truncate">${safeVal}</span>
+                    </span>
+                    <span class="text-gray-500 flex-shrink-0 ml-2">${opt.count}</span>
+                </label>`;
+    }).join('');
+    updateColumnFilterLabel(col);
+}
+
+function toggleColumnValue(col, checkbox) {
+    const val = checkbox.value;
+    if (checkbox.checked) {
+        if (!columnFilters[col].includes(val)) columnFilters[col].push(val);
+    } else {
+        columnFilters[col] = columnFilters[col].filter(v => v !== val);
+    }
+    updateColumnFilterLabel(col);
+    currentFilter = ''; // a column filter selection always overrides an active stat-card filter
+    document.querySelectorAll('.filter-button').forEach(btn => btn.classList.remove('active'));
+    syncFiltersToUrl();
+    loadFilteredData(1);
+}
+
+function updateColumnFilterLabel(col) {
+    const labelEl = document.getElementById(col + 'FilterLabel');
+    const countEl = document.getElementById(col + 'SelCount');
+    const n = columnFilters[col].length;
+    if (labelEl) labelEl.textContent = n === 0 ? `All ${COLUMN_FILTER_LABELS[col]}` : (n === 1 ? columnFilters[col][0] : `${n} selected`);
+    if (countEl) countEl.textContent = `${n} selected`;
+}
+
+function clearColumnFilter(col) {
+    columnFilters[col] = [];
+    document.querySelectorAll(`#${col}OptionsList .col-filter-checkbox`).forEach(cb => cb.checked = false);
+    updateColumnFilterLabel(col);
+    syncFiltersToUrl();
+    loadFilteredData(1);
+}
+
+function clearAllColumnFilters() {
+    COLUMN_FILTER_KEYS.forEach(col => { columnFilters[col] = []; updateColumnFilterLabel(col); });
+}
+
+function filterColumnOptions(col, query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll(`#${col}OptionsList .col-filter-option`).forEach(opt => {
+        opt.style.display = (opt.dataset.label || '').includes(q) ? '' : 'none';
+    });
+}
+
+function syncFiltersToUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    COLUMN_FILTER_KEYS.forEach(col => {
+        const key = col === 'department' ? 'dept' : (col === 'om' ? 'om' : 'shift');
+        if (columnFilters[col].length) urlParams.set(key, columnFilters[col].join(','));
+        else urlParams.delete(key);
+    });
+    history.pushState(null, '', '?' + urlParams.toString());
+}
+
 function exportToCsv() {
     const urlParams = new URLSearchParams(window.location.search);
     const form = document.createElement('form');
@@ -1435,8 +1606,9 @@ function exportToCsv() {
     const dateTo = document.getElementById('dateTo') ? document.getElementById('dateTo').value : '';
     if (dateTo) appendInput('date_to', dateTo);
     
-    const dept = document.getElementById('departmentFilter') ? document.getElementById('departmentFilter').value : '';
-    if (dept) appendInput('department', dept);
+    if (columnFilters.department.length) appendInput('department', columnFilters.department.join(','));
+    if (columnFilters.shift.length) appendInput('shift', columnFilters.shift.join(','));
+    if (columnFilters.om.length) appendInput('om', columnFilters.om.join(','));
     
     const cov = document.getElementById('coverageFilter') ? document.getElementById('coverageFilter').value : '';
     if (cov) appendInput('coverage', cov);
@@ -1885,12 +2057,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchInput');
     const dateFrom = document.getElementById('dateFrom');
     const dateTo = document.getElementById('dateTo');
-    const departmentFilter = document.getElementById('departmentFilter');
     const coverageFilter = document.getElementById('coverageFilter');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     
     let searchTimeout;
-    let currentFilter = '';
+    // NOTE: currentFilter is intentionally NOT redeclared here — it's a module-scope `let`
+    // declared above (near the column-filter code) so both this closure and the outer
+    // column-filter functions read/write the same variable.
 
     document.addEventListener('click', function(e) {
         const wrapper = document.getElementById('irFilterWrapper');
@@ -1900,16 +2073,33 @@ document.addEventListener('DOMContentLoaded', function() {
             const chevron = document.getElementById('irFilterChevron');
             if (chevron) chevron.style.transform = '';
         }
+        COLUMN_FILTER_KEYS.forEach(col => {
+            const cWrapper = document.getElementById(col + 'FilterWrapper');
+            const cDd = document.getElementById(col + 'FilterDropdown');
+            if (cWrapper && cDd && !cWrapper.contains(e.target) && !cDd.contains(e.target)) {
+                cDd.classList.add('hidden');
+                const cChevron = document.getElementById(col + 'FilterChevron');
+                if (cChevron) cChevron.style.transform = '';
+            }
+        });
     });
 
     // Keep dropdown aligned when page scrolls or window resizes
     window.addEventListener('scroll', function() {
         const dd = document.getElementById('irFilterDropdown');
         if (dd && !dd.classList.contains('hidden')) positionIrDropdown();
+        COLUMN_FILTER_KEYS.forEach(col => {
+            const cDd = document.getElementById(col + 'FilterDropdown');
+            if (cDd && !cDd.classList.contains('hidden')) positionColumnDropdown(col);
+        });
     }, true);
     window.addEventListener('resize', function() {
         const dd = document.getElementById('irFilterDropdown');
         if (dd && !dd.classList.contains('hidden')) positionIrDropdown();
+        COLUMN_FILTER_KEYS.forEach(col => {
+            const cDd = document.getElementById(col + 'FilterDropdown');
+            if (cDd && !cDd.classList.contains('hidden')) positionColumnDropdown(col);
+        });
     });
 
     // Re-fetch IR form list whenever date changes
@@ -2008,11 +2198,17 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('filter', currentFilter);
             if (currentFilter !== 'pending_coverage' && coverageFilter) coverageFilter.value = '';
         } else {
-            if (departmentFilter) formData.append('department', departmentFilter.value);
             if (coverageFilter) formData.append('coverage_1', coverageFilter.value);
             const irVals = getSelectedIrValues().join(',');
             if (irVals) formData.append('ir_filter', irVals);
         }
+
+        // Column filters (Department / Shift / Operations Manager) compose with everything
+        // above, including an active stat-card filter — unlike the old single dept dropdown,
+        // these are meant to layer on top rather than being mutually exclusive with cards.
+        columnFilters.department.forEach(v => formData.append('department[]', v));
+        columnFilters.shift.forEach(v => formData.append('shift[]', v));
+        columnFilters.om.forEach(v => formData.append('om[]', v));
 
         formData.append('date_from', dateFrom ? dateFrom.value : '');
         formData.append('date_to', dateTo ? dateTo.value : '');
@@ -2031,6 +2227,11 @@ document.addEventListener('DOMContentLoaded', function() {
             initColumnToggler(currentTab);
         });
     }
+    // toggleColumnValue() and clearColumnFilter() are declared outside this DOMContentLoaded
+    // closure, so they can't see this local loadFilteredData — expose it on window so they
+    // (and anything else outside this closure) can call it. Without this, checking/unchecking
+    // a Department/Shift/OM filter updates the URL but never refreshes the table.
+    window.loadFilteredData = loadFilteredData;
 
     function setupPaginationLinks() {
         document.querySelectorAll('.pagination-link').forEach(link => {
@@ -2047,13 +2248,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
     function handleCardFilter(filterValue) {
         const urlParams = new URLSearchParams(window.location.search);
-        urlParams.delete('dept'); urlParams.delete('cov'); urlParams.delete('filter'); urlParams.delete('ir');
+        urlParams.delete('dept'); urlParams.delete('shift'); urlParams.delete('om');
+        urlParams.delete('cov'); urlParams.delete('filter'); urlParams.delete('ir');
         
-        if(departmentFilter) departmentFilter.value = '';
         if(coverageFilter) coverageFilter.value = '';
         // Clear IR checkboxes
         document.querySelectorAll('#irOptionsList .ir-checkbox').forEach(cb => cb.checked = false);
         updateIrLabel();
+        clearAllColumnFilters();
         
         currentFilter = filterValue;
         urlParams.set('filter', filterValue);
@@ -2070,12 +2272,15 @@ document.addEventListener('DOMContentLoaded', function() {
         currentFilter = '';
         urlParams.delete('filter');
         
-        if (departmentFilter && departmentFilter.value) urlParams.set('dept', departmentFilter.value); else urlParams.delete('dept');
         if (coverageFilter && coverageFilter.value) urlParams.set('cov', coverageFilter.value); else urlParams.delete('cov');
         const irVals = getSelectedIrValues().join(',');
         if (irVals) urlParams.set('ir', irVals); else urlParams.delete('ir');
         if (dateFrom && dateFrom.value) urlParams.set('from', dateFrom.value); else urlParams.delete('from');
         if (dateTo && dateTo.value) urlParams.set('to', dateTo.value); else urlParams.delete('to');
+        COLUMN_FILTER_KEYS.forEach(col => {
+            const key = col === 'department' ? 'dept' : col;
+            if (columnFilters[col].length) urlParams.set(key, columnFilters[col].join(',')); else urlParams.delete(key);
+        });
         
         document.querySelectorAll('.filter-button').forEach(btn => btn.classList.remove('active'));
         history.pushState(null, '', '?' + urlParams.toString());
@@ -2093,7 +2298,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.querySelectorAll('.filter-button').forEach(btn => { btn.addEventListener('click', function(e) { handleCardFilter(this.value); }); });
-    if(departmentFilter) departmentFilter.addEventListener('change', handleDropdownFilter);
     if(coverageFilter) coverageFilter.addEventListener('change', handleDropdownFilter);
     // Bind initial IR checkboxes
     bindIrCheckboxListeners();
@@ -2106,7 +2310,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (currentFilter) urlParams.set('filter', currentFilter);
                 else {
-                    if (departmentFilter && departmentFilter.value) urlParams.set('dept', departmentFilter.value);
                     if (coverageFilter && coverageFilter.value) urlParams.set('cov', coverageFilter.value);
                     const irVals = getSelectedIrValues().join(',');
                     if (irVals) urlParams.set('ir', irVals); else urlParams.delete('ir');
@@ -2117,32 +2320,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         });
     }
-    
-    function fetchDepartments() {
-        const tab  = new URLSearchParams(window.location.search).get('tab') || 'absenteeism';
-        if (tab === 'vto') return;
-        const from = dateFrom ? dateFrom.value : '';
-        const to   = dateTo   ? dateTo.value   : '';
-        const url  = `partials/get_departments.php?type=${tab}&date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`;
-        const currentDept = departmentFilter ? departmentFilter.value : '';
-        fetch(url)
-        .then(r => r.json())
-        .then(items => {
-            if (!departmentFilter) return;
-            departmentFilter.innerHTML = '<option value="">All Departments</option>';
-            items.forEach(dept => {
-                const opt = document.createElement('option');
-                opt.value = dept;
-                opt.textContent = dept;
-                if (dept === currentDept) opt.selected = true;
-                departmentFilter.appendChild(opt);
-            });
-        })
-        .catch(() => {});
-    }
 
-    if(dateFrom) dateFrom.addEventListener('change', function() { fetchIRForms(); fetchDepartments(); handleDropdownFilter(); });
-    if(dateTo)   dateTo.addEventListener('change',   function() { fetchIRForms(); fetchDepartments(); handleDropdownFilter(); });
+    if(dateFrom) dateFrom.addEventListener('change', function() { fetchIRForms(); handleDropdownFilter(); });
+    if(dateTo)   dateTo.addEventListener('change',   function() { fetchIRForms(); handleDropdownFilter(); });
+
+    // Restore Department/Shift/Operations Manager selections from the URL (deep-linking /
+    // page refresh). Their option lists are fetched lazily when each dropdown is opened, so
+    // there's nothing to populate here beyond the selected values + labels.
+    (function restoreColumnFiltersFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlKeyForCol = { department: 'dept', shift: 'shift', om: 'om' };
+        COLUMN_FILTER_KEYS.forEach(col => {
+            const raw = urlParams.get(urlKeyForCol[col]);
+            if (raw) {
+                columnFilters[col] = raw.split(',').map(v => v.trim()).filter(Boolean);
+                updateColumnFilterLabel(col);
+            }
+        });
+    })();
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('filter')) {
@@ -2283,7 +2478,14 @@ function confirmSendEmail(event, url) {
         'Send Email Notification',
         'Are you sure you want to send the email notification for this record?',
         function() {
-            window.location.href = urlWithReturn;
+            // Submit as POST (to the same query-string URL) so send_email.php's server-side
+            // "must be a deliberate POST" safety gate is satisfied here, in this one confirm —
+            // instead of navigating via GET and landing on a second confirmation page there.
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = urlWithReturn;
+            document.body.appendChild(form);
+            form.submit();
         },
         'fa-envelope',
         'blue'

@@ -1,9 +1,4 @@
 <?php
-// components/check_shift_notifications.php
-// Polled by the dashboard. Returns currently-due shift reminders as JSON (stateless — does
-// NOT write to global_notifications, so it never triggers the VTO Request popup). The client
-// dedupes by key + time-bucket so late reminders repeat every 5 min and absent milestones
-// (1hr/30min before, 30min/1hr after shift start) fire once each while coverage stays pending.
 session_start();
 date_default_timezone_set('Asia/Manila');
 
@@ -62,12 +57,18 @@ while ($row = $rows->fetch_assoc()) {
     }
 }
 
-// --- LATE: pop every 15 min while coverage still pending ---
+// --- LATE: pop every 15 min for today's tardiness records that still need action ---
+// NOTE: tardiness does not always require coverage, so this reminder is no longer gated
+// on coverage_1 status — instead it only fires while the record still has a pending email
+// or an untriggered fire status. minutes_late of 0 or -1 means the record hasn't actually
+// been updated yet / the employee hasn't arrived, so those are excluded.
 $lateBucket = floor($now / 900);
 
 $stmt = $con->prepare(
     "SELECT id, full_name, shift, minutes_late FROM tardiness
-     WHERE date_of_incident = ? AND (coverage_1 IS NULL OR coverage_1 IN ('PENDING', 'UNCOVERED') OR coverage_1 = '')"
+     WHERE date_of_incident = ?
+       AND minutes_late > 0
+       AND ((email_sent = 0 OR email_sent IS NULL) OR (trigger_date IS NULL OR trigger_date = ''))"
 );
 $stmt->bind_param('s', $today);
 $stmt->execute();
@@ -78,7 +79,7 @@ while ($row = $rows->fetch_assoc()) {
         'key' => 'LATE-' . $row['id'] . '-' . $lateBucket,
         'type' => 'late',
         'name' => $row['full_name'],
-        'message' => 'Still marked late (' . $row['minutes_late'] . ' min) — coverage not yet confirmed.',
+        'message' => 'Still marked late (' . $row['minutes_late'] . ' min).',
         'shift' => $row['shift'],
     ];
 }

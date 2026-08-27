@@ -50,7 +50,6 @@ function buildInfractionEmail(PDO $pdo, string $type, array $record, array $send
         'cxi-slm@communixinc.com',
         'ken.munoz@communixinc.com',
         'humanresources@communixinc.com',
-        'cxi-hr@communixinc.com',
         'cxi.clinic@communixinc.com',
     ];
     if ($type === 'tardiness') {

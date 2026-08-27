@@ -14,6 +14,29 @@ $type = isset($_POST['type']) ? $_POST['type'] : (isset($_GET['tab']) ? $_GET['t
 $dateFrom = isset($_POST['date_from']) ? $_POST['date_from'] : (isset($_GET['from']) ? $_GET['from'] : '');
 $dateTo = isset($_POST['date_to']) ? $_POST['date_to'] : (isset($_GET['to']) ? $_GET['to'] : '');
 $department = isset($_POST['department']) ? $_POST['department'] : (isset($_GET['dept']) ? $_GET['dept'] : '');
+
+// Google-Sheets-style multi-select column filters (Department / Shift / Operations Manager).
+// Accepts either a real array (department[]=A&department[]=B) or a comma-separated string,
+// for compatibility with both the new dropdown UI and any older single-value callers.
+function normalizeMultiFilterParam($val) {
+    if (is_array($val)) {
+        return array_values(array_filter(array_map('trim', $val), function ($v) { return $v !== ''; }));
+    }
+    if (is_string($val) && $val !== '') {
+        return array_values(array_filter(array_map('trim', explode(',', $val)), function ($v) { return $v !== ''; }));
+    }
+    return [];
+}
+
+$departmentValues = normalizeMultiFilterParam(
+    isset($_POST['department']) ? $_POST['department'] : (isset($_GET['dept']) ? $_GET['dept'] : '')
+);
+$shiftValues = normalizeMultiFilterParam(
+    isset($_POST['shift']) ? $_POST['shift'] : (isset($_GET['shift']) ? $_GET['shift'] : '')
+);
+$omValues = normalizeMultiFilterParam(
+    isset($_POST['om']) ? $_POST['om'] : (isset($_GET['om']) ? $_GET['om'] : '')
+);
 $coverage = '';
 if ($type === 'absenteeism') {
     $coverage = isset($_POST['coverage_1']) ? $_POST['coverage_1'] : (isset($_GET['cov']) ? $_GET['cov'] : '');
@@ -74,6 +97,10 @@ if (!empty($cardFilter)) {
                 $params[':today_date'] = $manilaToday; // Use Manila date
             }
             break;
+        case 'pending_fire':
+            // Used by the notification center's "X pending fire triggers" summary links.
+            $whereClauses[] = "(trigger_date IS NULL OR trigger_date = '')";
+            break;
         }
 }
 // If no card filter, check status dropdown
@@ -102,6 +129,9 @@ elseif (!empty($statusFilter)) {
                 $params[':status_today_date'] = $manilaToday; // Use Manila date
             }
             break;
+        case 'pending_fire':
+            $whereClauses[] = "(trigger_date IS NULL OR trigger_date = '')";
+            break;
     }
 }
 
@@ -129,9 +159,24 @@ if (!empty($dateTo)) {
     $params[':date_to'] = $dateTo;
 }
 
-if (!empty($department)) {
-    $whereClauses[] = "department = :department";
-    $params[':department'] = $department;
+// Multi-select column filters (Department / Shift / Operations Manager). Each behaves like a
+// Google Sheets column filter: an IN clause over whichever values the user checked.
+function appendInFilter(&$whereClauses, &$params, $column, array $values, $paramPrefix) {
+    if (empty($values)) return;
+    $placeholders = [];
+    foreach ($values as $i => $val) {
+        $key = ":{$paramPrefix}_{$i}";
+        $placeholders[] = $key;
+        $params[$key] = $val;
+    }
+    $whereClauses[] = "$column IN (" . implode(',', $placeholders) . ")";
+}
+
+appendInFilter($whereClauses, $params, 'department', $departmentValues, 'dept');
+appendInFilter($whereClauses, $params, 'shift', $shiftValues, 'shift');
+// operation_manager only exists on absenteeism/tardiness, not vto_tracker.
+if ($type !== 'vto') {
+    appendInFilter($whereClauses, $params, 'operation_manager', $omValues, 'om');
 }
 
 // ONLY apply coverage filter for absenteeism
@@ -276,7 +321,7 @@ try {
             $titleMonth = date('F Y');
         }
 
-        $deptLabel    = !empty($department) ? $department : 'All';
+        $deptLabel    = !empty($departmentValues) ? implode(', ', $departmentValues) : 'All';
         $totalEmp     = count($records);
         $exportDate   = date('m/d/Y G:i');
 
@@ -473,33 +518,6 @@ try {
                                 <div class="text-sm text-gray-300"><?= isset($record['timestamp']) ? date('g:i A', strtotime($record['timestamp'])) : '' ?></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium transition-all">
-                                
-                                <?php
-                                    $cov = trim($record["coverage_1"] ?? ($record["coverage"] ?? ""));
-                                    $covType = trim($record["coverage_type_1"] ?? ($record["coverage_type"] ?? ""));
-                                    $coverageFormatted = $cov;
-                                    if ($covType !== '') {
-                                        $coverageFormatted .= " ($covType)";
-                                    }
-                                ?>
-                                <!-- NEW VTO COPY BUTTON -->
-                                <button onclick="copyVTODetails(this.dataset.vto)" 
-                                        data-vto='<?= htmlspecialchars(json_encode([
-                                            "vto_type" => $record["vto_type"] ?? "",
-                                            "time_out" => $record["time_out"] ?? "",
-                                            "shift" => $record["shift"] ?? "",
-                                            "coverage" => $coverageFormatted,
-                                            "worked_mins" => $record["mins_of_work"] ?? "",
-                                            "vto_mins" => $record["vto_mins"] ?? "",
-                                            "approved_by" => $record["approved_by"] ?? "",
-                                            "reported_by" => $record["sub_name"] ?? ""
-                                        ]), ENT_QUOTES, "UTF-8") ?>'
-                                        class="text-blue-400 hover:text-blue-300 mr-3" 
-                                        title="Copy VTO Details" 
-                                        style="background: none; border: none; cursor: pointer;">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-
                                 <?php if ($type === 'absenteeism'): ?>
                                     <?php if (!$record['email_sent']): ?>
                                         <a href="send_email.php?send_email=<?= $record['id'] ?>&type=<?= $type ?>" onclick="return confirmSendEmail(event, this.href)" title="Send Email" class="text-blue-500 hover:text-blue-400 mr-3">
@@ -1102,36 +1120,5 @@ function formatAbsentReport(record) {
            `Reason for Absence: ${record.reason || ''}\n` +
            `Scheduled Shift: ${shiftTime}\n` +
            `Covered/Uncovered?: ${coverageText}`;
-}
-
-// === NEW: Copy VTO Details Script ===
-function copyVTODetails(dataString) {
-    try {
-        // Parse the JSON data passed from the button
-        const data = JSON.parse(dataString);
-        
-        // Format the clipboard text as requested
-        const report = `VTO Type: ${data.vto_type || ''}\n` +
-                       `VTO time: ${data.time_out || ''}\n` +
-                       `Original Shift: ${data.shift || ''}\n` +
-                       `Cover By: ${data.coverage || ''}\n` +
-                       `Minutes Worked: ${data.worked_mins || '0'} Mins\n` +
-                       `VTO minutes: ${data.vto_mins || '0'} Mins\n\n` +
-                       `Approved by: ${data.approved_by || ''}\n\n` +
-                       `${data.reported_by || ''}`;
-
-        // Write to clipboard
-        navigator.clipboard.writeText(report)
-            .then(() => {
-                alert('VTO details copied to clipboard!');
-            })
-            .catch(err => {
-                console.error('Clipboard error:', err);
-                alert('Failed to copy to clipboard. Please try again.');
-            });
-    } catch (e) {
-        console.error('Error parsing VTO data:', e);
-        alert('An error occurred while copying the VTO details.');
-    }
 }
 </script>

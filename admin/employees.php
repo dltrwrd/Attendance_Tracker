@@ -151,7 +151,7 @@ renderSidebar('employees');
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 mt-4">
             <h1 class="text-2xl md:text-3xl font-bold text-gray-100">Manage Agents</h1>
             <div class="flex flex-wrap gap-2">
-                <button type="button" onclick="document.getElementById('importModal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow transition-colors font-medium">
+                <button type="button" onclick="openImportModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow transition-colors font-medium">
                     <i class="fas fa-file-import mr-2"></i> Import CSV
                 </button>
                 <button type="button" id="editTeamBtn" onclick="showEditTeamModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center shadow transition-colors font-medium hidden">
@@ -437,7 +437,123 @@ renderSidebar('employees');
     </div>
 </div>
 
+<!-- Import CSV Modal -->
+<div id="importModal" class="hidden fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-[60] transition-opacity duration-300 p-4">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-5 border-b border-gray-700 pb-4">
+                <h3 class="text-xl font-bold text-white"><i class="fas fa-file-import mr-2 text-blue-500"></i> Import Agents</h3>
+                <button onclick="closeImportModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form id="importForm">
+                <div class="mb-4">
+                    <p class="text-sm text-gray-300 mb-2">Upload a CSV file containing agent details.</p>
+                    <a href="download_employee_template.php" class="text-blue-400 hover:text-blue-300 text-sm font-medium inline-flex items-center"><i class="fas fa-download mr-1"></i> Download Template</a>
+                </div>
+                
+                <div id="dropZone" class="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-blue-500 hover:bg-blue-500/10 transition-all cursor-pointer group mb-4">
+                    <input type="file" name="csv_file" id="fileInput" class="hidden" accept=".csv">
+                    <i class="fa-solid fa-cloud-arrow-up text-4xl text-gray-500 group-hover:text-blue-500 mb-3"></i>
+                    <p id="fileName" class="text-gray-300 font-medium">Drag & drop or <span class="text-blue-500">browse CSV</span></p>
+                </div>
+
+                <div class="mb-6 bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                    <label class="flex items-start cursor-pointer">
+                        <div class="flex items-center h-5">
+                            <input type="checkbox" id="overwrite_existing" name="overwrite" value="true" class="w-5 h-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2 mt-0.5">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <span class="font-bold text-gray-200 block">Overwrite Existing Details</span>
+                            <span class="text-gray-400 text-xs">If an employee ID already exists, their details will be updated with the CSV data. If unchecked, existing records are skipped.</span>
+                        </div>
+                    </label>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeImportModal()" 
+                            class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded-lg transition-colors font-medium">
+                        Cancel
+                    </button>
+                    <button type="submit" id="submitImport"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg flex items-center shadow-lg transition-colors font-medium">
+                        <i class="fas fa-upload mr-2"></i> Upload CSV
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+// Import Modal Functions
+function openImportModal() { document.getElementById('importModal').classList.remove('hidden'); }
+function closeImportModal() { document.getElementById('importModal').classList.add('hidden'); }
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileNameDisplay = document.getElementById('fileName');
+
+dropZone.onclick = () => fileInput.click();
+fileInput.onchange = () => { if (fileInput.files.length) fileNameDisplay.innerText = fileInput.files[0].name; };
+
+['dragover', 'dragenter'].forEach(type => {
+    dropZone.addEventListener(type, (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-blue-500/10'); });
+});
+['dragleave', 'drop'].forEach(type => {
+    dropZone.addEventListener(type, () => { dropZone.classList.remove('border-blue-500', 'bg-blue-500/10'); });
+});
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        fileNameDisplay.innerText = e.dataTransfer.files[0].name;
+    }
+});
+
+document.getElementById('importForm').onsubmit = function(e) {
+    e.preventDefault();
+    if (!fileInput.files.length) {
+        alert("Please select a CSV file.");
+        return;
+    }
+    
+    const btn = document.getElementById('submitImport');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+    
+    const formData = new FormData();
+    formData.append('csv_file', fileInput.files[0]);
+    if (document.getElementById('overwrite_existing').checked) {
+        formData.append('overwrite', 'true');
+    }
+    
+    fetch('import_employees_ajax.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert("Error: " + data.message);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("An error occurred during import.");
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+};
+
 let currentQuickFilter = '';
 
 function toggleQuickFilter(type) {
@@ -650,12 +766,14 @@ document.addEventListener('click', e => {
     if (e.target === document.getElementById('deleteModal')) closeDeleteModal();
     if (e.target === document.getElementById('editTeamModal')) closeEditTeamModal();
     if (e.target === document.getElementById('individualEditModal')) closeIndividualModal();
+    if (e.target === document.getElementById('importModal')) closeImportModal();
 });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         if (document.getElementById('deleteModal')) closeDeleteModal();
         if (!document.getElementById('editTeamModal').classList.contains('hidden')) closeEditTeamModal();
         if (!document.getElementById('individualEditModal').classList.contains('hidden')) closeIndividualModal();
+        if (!document.getElementById('importModal').classList.contains('hidden')) closeImportModal();
     }
 });
 </script>
