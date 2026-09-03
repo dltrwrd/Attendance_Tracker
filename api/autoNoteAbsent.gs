@@ -425,6 +425,42 @@ function parseStartMinutes(str) {
 // Adds newShiftText to rawCellText's lines, deduped and sorted by start time (unparseable
 // lines like "RDOT" sort last). Must take the RAW cell text, not a fallback-substituted
 // value, or repeat fires re-stack an already-stacked cell and grow it forever.
+// Dedupe key for a coverage note. Strips the "ORIGINAL SHIFT:" / "SHIFT:" line, which is read
+// from the coverer's own cell value and then REWRITTEN by stackShiftLines a few lines later in
+// the same function. On a re-fire the cell now holds the stacked value, so that line no longer
+// matches what was stored -- comparing the whole comment reported "not found" and appended a
+// second copy of the same note. Everything that actually identifies a note (covered employee,
+// status, coverage shift, coverage type, SLT) is kept, so genuinely different notes still stack.
+function coverageNoteKey(noteText) {
+  if (!noteText) return "";
+  var lines = noteText.split("\n");
+  var out = [];
+  var skipping = false;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+
+    // Start of the volatile block.
+    if (/^(ORIGINAL SHIFT|SHIFT)\s*:/i.test(line)) {
+      skipping = true;
+      continue;
+    }
+
+    // Once the coverer's cell has been stacked, coveringOriginalShift is multi-line, so it
+    // injects extra lines after the label -- and those carry no label of their own. They are
+    // just as volatile as the labelled line, so drop them too, until the next labelled line
+    // (or a blank line) ends the block. Missing this still let duplicates through.
+    if (skipping) {
+      if (line !== "" && !/^[A-Z][A-Z ]*:/.test(line)) continue;
+      skipping = false;
+    }
+
+    out.push(line);
+  }
+
+  return out.join("\n").trim();
+}
+
 function stackShiftLines(rawCellText, newShiftText) {
   var lines = rawCellText
     ? rawCellText
@@ -699,10 +735,14 @@ function addAbsentCoverageNote(
     );
   }
 
+  // Compare on coverageNoteKey, not the raw comment -- the "ORIGINAL SHIFT:"/"SHIFT:" line is
+  // read from this cell and rewritten above, so a re-fire would otherwise never match and would
+  // append a duplicate.
   var existingNote = targetCell.getNote();
   if (existingNote && existingNote.trim() !== "") {
-    // Check if the exact comment is already present to prevent duplication
-    if (existingNote.indexOf(comment.trim()) !== -1) {
+    if (
+      coverageNoteKey(existingNote).indexOf(coverageNoteKey(comment)) !== -1
+    ) {
       Logger.log("Coverage note already exists on cell. Skipping duplication.");
       return;
     }

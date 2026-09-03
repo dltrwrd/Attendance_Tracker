@@ -558,10 +558,14 @@ function addCoverageNote(
     );
   }
 
+  // Compare on coverageNoteKey (from autoNoteAbsent.gs, shared global scope), not the raw
+  // comment -- the "ORIGINAL SHIFT:"/"SHIFT:" line is read from this cell and rewritten above,
+  // so a re-fire would otherwise never match and would append a duplicate.
   var existingNote = targetCell.getNote();
   if (existingNote && existingNote.trim() !== "") {
-    // Check if the exact comment is already present to prevent duplication
-    if (existingNote.indexOf(comment.trim()) !== -1) {
+    if (
+      coverageNoteKey(existingNote).indexOf(coverageNoteKey(comment)) !== -1
+    ) {
       Logger.log("Coverage note already exists on cell. Skipping duplication.");
       return;
     }

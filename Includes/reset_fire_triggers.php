@@ -21,11 +21,23 @@ date_default_timezone_set('Asia/Manila');
 error_log("=== Cron Job Started: reset_fire_triggers.php at " . date('Y-m-d H:i:s') . " ===");
 
 try {
-    $manila_threshold = date('Y-m-d H:i:s', strtotime('-45 seconds'));
-    
-    error_log("Manila Threshold (90 sec ago): " . $manila_threshold);
-    
-    // Reset fire_trigger for records older than 90 seconds
+    // Must stay LONGER than one full read cycle, otherwise fire expires before anything reads it.
+    // The only reader is fetchDataFromPHP's 1-minute time-based trigger (the PHP webhook path is
+    // not in use), so the floor is 60s + fetch duration. 3 minutes gives roughly three chances to
+    // catch a fire, which covers a slow fetch without overdoing it.
+    //
+    // Don't stretch this much further: fire re-fires on every trigger run while it is still set,
+    // so a long window means the same row is reprocessed over and over. That is safe (addNoteTofile
+    // and stackShiftLines both dedupe) but it burns Sheets calls, which is what causes the
+    // "Service Spreadsheets timed out" failures in the first place.
+    //
+    // If a fetch ever legitimately runs longer than this, scope the absenteeism query in
+    // api/mysql-to-sheets.php instead of widening this window.
+    $manila_threshold = date('Y-m-d H:i:s', strtotime('-3 minutes'));
+
+    error_log("Manila Threshold (3 min ago): " . $manila_threshold);
+
+    // Reset fire_trigger for records older than 3 minutes
     $tables = ['absenteeism', 'tardiness', 'vto_tracker'];
     $total_reset = 0;
     

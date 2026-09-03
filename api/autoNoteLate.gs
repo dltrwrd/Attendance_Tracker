@@ -536,9 +536,14 @@ function addLateCoverageNote(
     targetCell.setValue(stackedValue);
   }
 
+  // Compare on coverageNoteKey (from autoNoteAbsent.gs, shared global scope), not the raw
+  // comment -- the "ORIGINAL SHIFT:" line is read from this cell and rewritten by stackShiftLines
+  // above, so a re-fire would otherwise never match and would append a duplicate.
   var existingCoverNote = targetCell.getNote();
   if (existingCoverNote && existingCoverNote.trim() !== "") {
-    if (existingCoverNote.indexOf(comment.trim()) === -1) {
+    if (
+      coverageNoteKey(existingCoverNote).indexOf(coverageNoteKey(comment)) === -1
+    ) {
       targetCell.setNote(existingCoverNote.trim() + "\n\n" + comment);
     }
   } else {

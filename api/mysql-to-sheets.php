@@ -93,22 +93,15 @@ try {
     } else {
         throw new Exception("Invalid data type requested");
     }
-    // Auto-reset fired triggers so the sheet fetches them exactly once, avoiding race conditions with background cron/resets
-    if (in_array($type, ['absenteeism', 'tardiness', 'vto_tracker'])) {
-        $table = ($type === 'tardiness') ? 'tardiness' : ($type === 'vto_tracker' ? 'vto_tracker' : 'absenteeism');
-        $firedIds = [];
-        foreach ($data as $row) {
-            if (isset($row['fire_trigger']) && strtolower($row['fire_trigger']) === 'fire') {
-                $firedIds[] = $row['id'];
-            }
-        }
-        if (!empty($firedIds)) {
-            $placeholders = implode(',', array_fill(0, count($firedIds), '?'));
-            $resetStmt = $pdo->prepare("UPDATE $table SET fire_trigger = NULL WHERE id IN ($placeholders)");
-            $resetStmt->execute($firedIds);
-        }
-    }
-    
+    // NOTE: fire_trigger is deliberately NOT cleared here.
+    //
+    // This used to NULL every fired row on read, which made a fire single-shot: once any request
+    // read it, it was gone from MySQL whether or not Apps Script actually managed to write the
+    // note. A run that timed out, overlapped another run, or died mid-way lost the fire for good.
+    //
+    // Expiry is owned solely by includes/reset_fire_triggers.php (cron), which clears fires older
+    // than its threshold. That leaves a retry window: a fire missed by one fetch is picked up by
+    // the next. Re-firing is safe -- addNoteTofile/stackShiftLines both dedupe before writing.
     echo json_encode(['success' => true, 'data' => $data]);
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
