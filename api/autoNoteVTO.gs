@@ -76,7 +76,7 @@ function setupAutoFireTriggerVTO() {
 
   Browser.msgBox(
     "Success",
-    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 1 minutes.",
+    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 2 minutes.",
     Browser.Buttons.OK,
   );
 }
@@ -86,7 +86,7 @@ function addNoteToNotefile(rowNumber) {
   var mainSheet = ss.getSheetByName("VTO");
 
   var externalSpreadsheetId = "1XeyCSc3_cgMWXev2b-2XXZkmbzw6gdrigU-va1jx920";
-  var externalSheetName = "AUG";
+  var externalSheetName = "SEPT";
 
   var externalSs;
   try {
@@ -313,7 +313,7 @@ function addCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)

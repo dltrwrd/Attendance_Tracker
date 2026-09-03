@@ -2,16 +2,14 @@
 var CONFIG = {
   phpEndpoint:
     "https://lightpink-cormorant-243207.hostingersite.com/api/mysql-to-sheets.php",
-  refreshInterval: 10, // seconds
-  timeout: 10, // seconds for URLFetch
+  refreshInterval: 5, // seconds
+  timeout: 5, // seconds for URLFetch
 };
 
 // Must match includes/functions.php's triggerAutoNoteWebhook() $webhookSecret.
 var WEBHOOK_SECRET = "cxi-autonote-fire-9f3a7c2e51";
 
-// Global variables
 var refreshTriggerId = null;
-var lastExecutionTime = null;
 
 // Web App entry point -- PHP calls this right after setting fire_trigger in MySQL, so the
 // sync + fire-check runs immediately instead of waiting for the 1-minute scheduled trigger.
@@ -46,18 +44,15 @@ function handleWebhookPing(e) {
 }
 
 function fetchDataFromPHP() {
+  var lock = LockService.getScriptLock();
+  // Wait for up to 5 seconds for other processes to finish. If not, skip this run to prevent overlap.
+  if (!lock.tryLock(5000)) {
+    console.log("Skipping - previous execution still running");
+    return false;
+  }
+
   var startTime = new Date();
   console.log("Starting fetch at: " + startTime);
-
-  // Check if previous execution is still running
-  if (
-    lastExecutionTime &&
-    new Date() - lastExecutionTime < CONFIG.refreshInterval * 1000 - 1000
-  ) {
-    console.log("Skipping - previous execution still running");
-    return;
-  }
-  lastExecutionTime = startTime;
 
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var absenteeismSheet = spreadsheet.getSheetByName("AbsenteeismData");
@@ -109,9 +104,11 @@ function fetchDataFromPHP() {
     }
 
     console.log("Total execution time: " + (new Date() - startTime) + "ms");
+    lock.releaseLock();
     return true;
   } catch (e) {
     console.error("Error in fetchDataFromPHP: " + e.toString());
+    lock.releaseLock();
     return false;
   }
 }
@@ -308,7 +305,7 @@ function startAutoRefresh() {
   // Create a time-based trigger
   refreshTriggerId = ScriptApp.newTrigger("fetchDataFromPHP")
     .timeBased()
-    .everyMinutes(1) // Minimum interval is 1 minute
+    .everyMinutes(1.5) // Minimum interval is 1.5 minutes
     .create()
     .getUniqueId();
 

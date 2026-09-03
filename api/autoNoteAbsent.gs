@@ -73,8 +73,14 @@ function setupAutoFireTriggerAbsent() {
   // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersAbsent")
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(1)
     .create();
+
+  Browser.msgBox(
+    "Success",
+    "Auto-fire trigger setup complete! checkForFireTriggers will run every 1 minute.",
+    Browser.Buttons.OK,
+  );
 }
 
 function addNoteToSchedfile(rowNumber) {
@@ -82,7 +88,7 @@ function addNoteToSchedfile(rowNumber) {
   var mainSheet = ss.getSheetByName("ABSENTEEISM");
 
   var externalSpreadsheetId = "1XeyCSc3_cgMWXev2b-2XXZkmbzw6gdrigU-va1jx920";
-  var externalSheetName = "AUG";
+  var externalSheetName = "SEPT";
 
   var externalSs;
   try {
@@ -462,7 +468,7 @@ function addAbsentCoverageNote(
 ) {
   var lastRow = schedfileSheet.getLastRow();
   if (lastRow < 1) return;
-  var namesInSchedfile = schedfileSheet.getRange("L1:L" + lastRow).getValues();
+  var namesInSchedfile = schedfileSheet.getRange("M1:M" + lastRow).getValues();
   var nameRow = -1;
 
   // Extract only the name part (strip trailing times, parentheses, or comments)
