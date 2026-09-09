@@ -28,7 +28,7 @@ function checkForFireTriggersVTO() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("VTO");
-    var triggerColumn = 18; // Column P
+    var triggerColumn = 18; // Column R
 
     if (!sheet) return;
 
@@ -40,7 +40,7 @@ function checkForFireTriggersVTO() {
 
     for (var i = 1; i < data.length; i++) {
       var rowNumber = i + 1;
-      var fireValue = data[i][17]; // Column P is index 15 (0-based)
+      var fireValue = data[i][17]; // Column R is index 17 (0-based)
 
       if (fireValue && fireValue.toString().toLowerCase() === "fire") {
         try {
@@ -60,7 +60,6 @@ function checkForFireTriggersVTO() {
 }
 
 function setupAutoFireTriggerVTO() {
-  // Remove any existing checkForFireTriggersVTO triggers first
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (trigger) {
     if (trigger.getHandlerFunction() === "checkForFireTriggersVTO") {
@@ -68,7 +67,6 @@ function setupAutoFireTriggerVTO() {
     }
   });
 
-  // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersVTO")
     .timeBased()
     .everyMinutes(1)
@@ -76,7 +74,7 @@ function setupAutoFireTriggerVTO() {
 
   Browser.msgBox(
     "Success",
-    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 2 minutes.",
+    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 1 minute.",
     Browser.Buttons.OK,
   );
 }
@@ -275,7 +273,6 @@ function addNoteToNotefile(rowNumber) {
   } else {
     targetCell.setNote(comment);
   }
-  // Set cell value based on MinsWorked
   if (MinsWorked === 0) {
     targetCell.setValue("VTO - WD");
   } else {
@@ -559,8 +556,8 @@ function addCoverageNote(
   }
 
   // Compare on coverageNoteKey (from autoNoteAbsent.gs, shared global scope), not the raw
-  // comment -- the "ORIGINAL SHIFT:"/"SHIFT:" line is read from this cell and rewritten above,
-  // so a re-fire would otherwise never match and would append a duplicate.
+  // comment -- the own-shift line is read from this cell and rewritten above, so a re-fire
+  // would never match and would append a duplicate.
   var existingNote = targetCell.getNote();
   if (existingNote && existingNote.trim() !== "") {
     if (

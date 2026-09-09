@@ -62,7 +62,6 @@ function checkForFireTriggersAbsent() {
 }
 
 function setupAutoFireTriggerAbsent() {
-  // Remove any existing checkForFireTriggersAbsent triggers first
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (trigger) {
     if (trigger.getHandlerFunction() === "checkForFireTriggersAbsent") {
@@ -70,7 +69,6 @@ function setupAutoFireTriggerAbsent() {
     }
   });
 
-  // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersAbsent")
     .timeBased()
     .everyMinutes(1)
@@ -122,7 +120,7 @@ function addNoteToSchedfile(rowNumber) {
   var reason = mainSheet.getRange("J" + rowNumber).getValue();
   var coverage1 = mainSheet.getRange("L" + rowNumber).getValue();
   var coverageType1 = mainSheet.getRange("M" + rowNumber).getValue();
-  var coverageDetails1 = mainSheet.getRange("N" + rowNumber).getValue(); // Get Column M Coverage Shift/Details
+  var coverageDetails1 = mainSheet.getRange("N" + rowNumber).getValue();
   var coverage2 = mainSheet.getRange("P" + rowNumber).getValue();
   var coverageType2 = mainSheet.getRange("Q" + rowNumber).getValue();
   var coverageDetails2 = mainSheet.getRange("R" + rowNumber).getValue();
@@ -397,8 +395,8 @@ function addNoteToSchedfile(rowNumber) {
   // original -- so no coverer ever sees this red "ABSENT" overwrite instead of the real color.
   targetCell.setNote(comment);
   targetCell.setValue("ABSENT");
-  targetCell.setBackground("#FF0000"); // Red color
-  targetCell.setFontColor("#FFFFFF"); // White font color
+  targetCell.setBackground("#FF0000");
+  targetCell.setFontColor("#FFFFFF");
 }
 
 // True when a coverage field is a placeholder note (e.g. "TAGGED AS (BACK UP)", "NO NEED
@@ -422,15 +420,20 @@ function parseStartMinutes(str) {
   return hour * 60 + minute;
 }
 
-// Adds newShiftText to rawCellText's lines, deduped and sorted by start time (unparseable
-// lines like "RDOT" sort last). Must take the RAW cell text, not a fallback-substituted
-// value, or repeat fires re-stack an already-stacked cell and grow it forever.
-// Dedupe key for a coverage note. Strips the "ORIGINAL SHIFT:" / "SHIFT:" line, which is read
-// from the coverer's own cell value and then REWRITTEN by stackShiftLines a few lines later in
-// the same function. On a re-fire the cell now holds the stacked value, so that line no longer
-// matches what was stored -- comparing the whole comment reported "not found" and appended a
-// second copy of the same note. Everything that actually identifies a note (covered employee,
-// status, coverage shift, coverage type, SLT) is kept, so genuinely different notes still stack.
+// True for the note line showing the coverer's OWN shift ("REGULAR SHIFT:", the older
+// "ORIGINAL SHIFT:", or a bare "SHIFT:"). It is read from the coverer's cell and then rewritten
+// by stackShiftLines in the same run, so it differs on every re-fire.
+// Matches the "<word> SHIFT:" shape, not one fixed wording -- renaming ORIGINAL -> REGULAR
+// silently broke an exact-match version of this. "COVERAGE SHIFT:" is excluded: it comes from
+// the typed coverage text, so it stays stable and remains part of the note's identity.
+function isVolatileShiftLine(line) {
+  if (/^COVERAGE\s+SHIFT\s*:/i.test(line)) return false;
+  return /^[A-Za-z]*\s*SHIFT\s*:/i.test(line);
+}
+
+// Identity of a coverage note, used to skip one that is already on the cell. Drops the volatile
+// own-shift line so a re-fire still matches; keeps covered employee, status, coverage shift,
+// coverage type and SLT, so genuinely different notes still stack.
 function coverageNoteKey(noteText) {
   if (!noteText) return "";
   var lines = noteText.split("\n");
@@ -440,16 +443,13 @@ function coverageNoteKey(noteText) {
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].trim();
 
-    // Start of the volatile block.
-    if (/^(ORIGINAL SHIFT|SHIFT)\s*:/i.test(line)) {
+    if (isVolatileShiftLine(line)) {
       skipping = true;
       continue;
     }
 
-    // Once the coverer's cell has been stacked, coveringOriginalShift is multi-line, so it
-    // injects extra lines after the label -- and those carry no label of their own. They are
-    // just as volatile as the labelled line, so drop them too, until the next labelled line
-    // (or a blank line) ends the block. Missing this still let duplicates through.
+    // A stacked cell is multi-line, so the own-shift value spills onto unlabelled lines below
+    // its label. Those are volatile too -- drop until the next labelled or blank line.
     if (skipping) {
       if (line !== "" && !/^[A-Z][A-Z ]*:/.test(line)) continue;
       skipping = false;
@@ -461,6 +461,9 @@ function coverageNoteKey(noteText) {
   return out.join("\n").trim();
 }
 
+// Adds newShiftText to rawCellText's lines, deduped and sorted by start time (unparseable lines
+// like "RDOT" sort last). Must take the RAW cell text, not a fallback-substituted value, or
+// repeat fires re-stack an already-stacked cell and grow it forever.
 function stackShiftLines(rawCellText, newShiftText) {
   var lines = rawCellText
     ? rawCellText
@@ -735,9 +738,8 @@ function addAbsentCoverageNote(
     );
   }
 
-  // Compare on coverageNoteKey, not the raw comment -- the "ORIGINAL SHIFT:"/"SHIFT:" line is
-  // read from this cell and rewritten above, so a re-fire would otherwise never match and would
-  // append a duplicate.
+  // Compare on coverageNoteKey, not the raw comment -- the own-shift line is read from this cell
+  // and rewritten above, so a re-fire would never match and would append a duplicate.
   var existingNote = targetCell.getNote();
   if (existingNote && existingNote.trim() !== "") {
     if (

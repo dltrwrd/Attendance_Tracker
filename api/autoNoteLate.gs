@@ -60,7 +60,6 @@ function checkForFireTriggers() {
 }
 
 function setupAutoFireTrigger() {
-  // Remove any existing checkForFireTriggers triggers first
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (trigger) {
     if (trigger.getHandlerFunction() === "checkForFireTriggers") {
@@ -68,7 +67,6 @@ function setupAutoFireTrigger() {
     }
   });
 
-  // Create new time-based trigger to run every 1 minute
   ScriptApp.newTrigger("checkForFireTriggers")
     .timeBased()
     .everyMinutes(1)
@@ -76,7 +74,7 @@ function setupAutoFireTrigger() {
 
   Browser.msgBox(
     "Success",
-    "Auto-fire trigger setup complete! checkForFireTriggers will run every 2 minute.",
+    "Auto-fire trigger setup complete! checkForFireTriggers will run every 1 minute.",
     Browser.Buttons.OK,
   );
 }
@@ -537,8 +535,8 @@ function addLateCoverageNote(
   }
 
   // Compare on coverageNoteKey (from autoNoteAbsent.gs, shared global scope), not the raw
-  // comment -- the "ORIGINAL SHIFT:" line is read from this cell and rewritten by stackShiftLines
-  // above, so a re-fire would otherwise never match and would append a duplicate.
+  // comment -- the own-shift line is read from this cell and rewritten by stackShiftLines above,
+  // so a re-fire would never match and would append a duplicate.
   var existingCoverNote = targetCell.getNote();
   if (existingCoverNote && existingCoverNote.trim() !== "") {
     if (
