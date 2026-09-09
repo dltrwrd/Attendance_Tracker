@@ -228,7 +228,7 @@ function addNoteToSchedfile(rowNumber) {
     sanction +
     "\n" +
     "\n" +
-    "Original Shift: " +
+    "Regular Shift: " +
     originalShift +
     "\nReason: " +
     reason +
@@ -657,7 +657,7 @@ function addAbsentCoverageNote(
       " (" +
       statusType +
       ")" +
-      "\nORIGINAL SHIFT: " +
+      "\nREGULAR SHIFT: " +
       coveringOriginalShift +
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
@@ -686,7 +686,7 @@ function addAbsentCoverageNote(
         "COVERAGE: " +
         absentEmployeeName +
         " (ABSENT)" +
-        "\nORIGINAL SHIFT: " +
+        "\nREGULAR SHIFT: " +
         coveringOriginalShift +
         "\nCOVERAGE SHIFT: " +
         coverageShift +

@@ -2,8 +2,8 @@
 var CONFIG = {
   phpEndpoint:
     "https://lightpink-cormorant-243207.hostingersite.com/api/mysql-to-sheets.php",
-  refreshInterval: 5, // seconds
-  timeout: 5, // seconds for URLFetch
+  refreshInterval: 10, // seconds
+  timeout: 10, // seconds for URLFetch
 };
 
 // Must match includes/functions.php's triggerAutoNoteWebhook() $webhookSecret.

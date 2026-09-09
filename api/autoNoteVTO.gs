@@ -222,7 +222,7 @@ function addNoteToNotefile(rowNumber) {
     VTOType +
     "\nVTO time: " +
     VTOTime +
-    "\nOriginal Shift: " +
+    "\nRegular Shift: " +
     originalShift +
     "\nCover By: " +
     Coverage +
@@ -468,7 +468,7 @@ function addCoverageNote(
       " (" +
       statusType +
       ")" +
-      "\nORIGINAL SHIFT: " +
+      "\nREGULAR SHIFT: " +
       coveringOriginalShift +
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
@@ -497,7 +497,7 @@ function addCoverageNote(
         "COVERAGE: " +
         absentEmployeeName +
         " (ABSENT)" +
-        "\nORIGINAL SHIFT: " +
+        "\nREGULAR SHIFT: " +
         coveringOriginalShift +
         "\nCOVERAGE SHIFT: " +
         coverageShift +

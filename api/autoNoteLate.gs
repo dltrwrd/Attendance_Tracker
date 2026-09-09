@@ -222,7 +222,7 @@ function addNoteTofile(rowNumber) {
     comment =
       "UNDERTIME" +
       "\n" +
-      "\nOriginal Shift: " +
+      "\nRegular Shift: " +
       originalShift +
       "\nTIME IN : " +
       punchTime +
@@ -244,7 +244,7 @@ function addNoteTofile(rowNumber) {
     comment =
       title +
       "\n" +
-      "\nOriginal Shift: " +
+      "\nRegular Shift: " +
       originalShift +
       "\nTIME IN : " +
       punchTime +
@@ -498,7 +498,7 @@ function addLateCoverageNote(
       " (" +
       lateType.toUpperCase() +
       ")" +
-      "\nORIGINAL SHIFT: " +
+      "\nREGULAR SHIFT: " +
       coveringOriginalShift +
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
@@ -542,7 +542,8 @@ function addLateCoverageNote(
   var existingCoverNote = targetCell.getNote();
   if (existingCoverNote && existingCoverNote.trim() !== "") {
     if (
-      coverageNoteKey(existingCoverNote).indexOf(coverageNoteKey(comment)) === -1
+      coverageNoteKey(existingCoverNote).indexOf(coverageNoteKey(comment)) ===
+      -1
     ) {
       targetCell.setNote(existingCoverNote.trim() + "\n\n" + comment);
     }
