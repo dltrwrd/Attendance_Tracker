@@ -409,6 +409,22 @@ function isNoRealCoverer(text) {
   return upper.indexOf("NO NEED") === 0 || upper.indexOf("TAGGED AS") === 0;
 }
 
+// Coverage type with the typed hours appended, e.g. "RDOT" + "(RDOT - 8HRS RDOT)" -> "RDOT 8HRS".
+// Hours come from the coverage details first, then the coverage/name field; left as-is when no
+// hours are typed or the type already carries them.
+function coverageTypeWithHours(coverageType, coverageDetails, coveringName) {
+  var type = coverageType ? coverageType.toString().trim() : "";
+  var hoursRegex = /(\d+(?:\.\d+)?)\s*HRS?\b/i;
+  if (hoursRegex.test(type)) return type;
+  var sources = [coverageDetails, coveringName];
+  for (var i = 0; i < sources.length; i++) {
+    if (!sources[i]) continue;
+    var match = sources[i].toString().match(hoursRegex);
+    if (match) return (type ? type + " " : "") + match[1] + "HRS";
+  }
+  return type;
+}
+
 // Shift string -> minutes-since-midnight of its first HH:MM AM/PM, or -1 if unparseable (e.g. "RDOT").
 function parseStartMinutes(str) {
   if (!str) return -1;
@@ -677,7 +693,7 @@ function addAbsentCoverageNote(
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
       "\nCOVERAGE TYPE: " +
-      coverageType +
+      coverageTypeWithHours(coverageType, coverageDetails, coveringName) +
       "\n" +
       "\n" +
       sltDuty;

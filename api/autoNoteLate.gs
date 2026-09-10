@@ -503,7 +503,7 @@ function addLateCoverageNote(
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
       "\nCOVERAGE TYPE: " +
-      coverageType +
+      coverageTypeWithHours(coverageType, coverageDetails, coveringName) +
       "\n" +
       "\n" +
       sltDuty;
