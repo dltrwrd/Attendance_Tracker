@@ -28,7 +28,7 @@ function checkForFireTriggersVTO() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("VTO");
-    var triggerColumn = 18; // Column R
+    var triggerColumn = 18; // Column P
 
     if (!sheet) return;
 
@@ -40,7 +40,7 @@ function checkForFireTriggersVTO() {
 
     for (var i = 1; i < data.length; i++) {
       var rowNumber = i + 1;
-      var fireValue = data[i][17]; // Column R is index 17 (0-based)
+      var fireValue = data[i][17]; // Column P is index 15 (0-based)
 
       if (fireValue && fireValue.toString().toLowerCase() === "fire") {
         try {
@@ -60,6 +60,7 @@ function checkForFireTriggersVTO() {
 }
 
 function setupAutoFireTriggerVTO() {
+  // Remove any existing checkForFireTriggersVTO triggers first
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (trigger) {
     if (trigger.getHandlerFunction() === "checkForFireTriggersVTO") {
@@ -67,6 +68,7 @@ function setupAutoFireTriggerVTO() {
     }
   });
 
+  // Create new time-based trigger to run every 5 minutes
   ScriptApp.newTrigger("checkForFireTriggersVTO")
     .timeBased()
     .everyMinutes(1)
@@ -74,7 +76,7 @@ function setupAutoFireTriggerVTO() {
 
   Browser.msgBox(
     "Success",
-    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 1 minute.",
+    "Auto-fire trigger setup complete! checkForFireTriggersVTO will run every 2 minutes.",
     Browser.Buttons.OK,
   );
 }
@@ -273,6 +275,7 @@ function addNoteToNotefile(rowNumber) {
   } else {
     targetCell.setNote(comment);
   }
+  // Set cell value based on MinsWorked
   if (MinsWorked === 0) {
     targetCell.setValue("VTO - WD");
   } else {
@@ -436,7 +439,7 @@ function addCoverageNote(
     normalizedCoverageType.indexOf("BACKUP") !== -1 ||
     normalizedCoverageType.indexOf("AGENTMODE") !== -1;
 
-  // DSOT: the typed time (e.g. "Juan (11:00 PM - 3:00 AM)") is the SEGMENT of the VTO'd
+  // DSOT/RDOT: the typed time (e.g. "Juan (11:00 PM - 3:00 AM)") is the SEGMENT of the VTO'd
   // employee's shift this coverer handles, not their own shift -- matters when multiple
   // coverers split one shift. Falls back to the VTO'd employee's full shift if untyped.
   var dsotCoverageShift = coverageShift
@@ -445,10 +448,11 @@ function addCoverageNote(
       ? originalShift.toString().trim()
       : "";
 
-  // Blank cell (e.g. RDOT/DSOT day): non-DSOT falls back to a typed time, then to copying the
-  // VTO'd employee's shift. DSOT stays blank -- the typed time is the segment above, not this.
+  // Blank cell on a non-DSOT/RDOT coverage: fall back to a typed time, then to the VTO'd
+  // employee's shift. DSOT/RDOT stay blank -- the coverer has nothing plotted that day, so the
+  // note omits REGULAR SHIFT and the typed time goes in as COVERAGE SHIFT instead.
   var usedFallbackShift = false;
-  if (!coveringOriginalShift && !isDSOT) {
+  if (!coveringOriginalShift && !isDSOT && !isRDOT) {
     if (coverageShift) {
       coveringOriginalShift = coverageShift;
     } else if (originalShift) {
@@ -465,8 +469,9 @@ function addCoverageNote(
       " (" +
       statusType +
       ")" +
-      "\nREGULAR SHIFT: " +
-      coveringOriginalShift +
+      (coveringOriginalShift
+        ? "\nREGULAR SHIFT: " + coveringOriginalShift
+        : "") +
       "\nCOVERAGE SHIFT: " +
       dsotCoverageShift +
       "\nCOVERAGE TYPE: " +
@@ -524,7 +529,7 @@ function addCoverageNote(
   // (same GAS project, shared global scope). Skipped for BACKUP/AGENT MODE -- value stays as-is.
   if (!isBackupOrAgentMode) {
     var stackedValue;
-    if (isDSOT) {
+    if (isDSOT || isRDOT) {
       stackedValue = stackShiftLines(rawCellText, dsotCoverageShift);
     } else if (statusType === "VTO") {
       // Straight backup taking over the exact shift, not an extra one -- copy, don't stack.
@@ -556,8 +561,8 @@ function addCoverageNote(
   }
 
   // Compare on coverageNoteKey (from autoNoteAbsent.gs, shared global scope), not the raw
-  // comment -- the own-shift line is read from this cell and rewritten above, so a re-fire
-  // would never match and would append a duplicate.
+  // comment -- the "ORIGINAL SHIFT:"/"SHIFT:" line is read from this cell and rewritten above,
+  // so a re-fire would otherwise never match and would append a duplicate.
   var existingNote = targetCell.getNote();
   if (existingNote && existingNote.trim() !== "") {
     if (
